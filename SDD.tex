@@ -1,0 +1,52 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- PAKETLER ---
+\usepackage[utf8]{inputenc}
+\usepackage[turkish]{babel}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{titlesec}
+
+% Sayfa kenar boşlukları
+\geometry{margin=1in}
+
+% --- KAPAK SAYFASI BİLGİLERİ ---
+\title{
+    \vspace{2in}
+    \textbf{\Huge YAZILIM TASARIM DÖKÜMANI (SDD)} \\
+    \vspace{0.5in}
+    \textbf{\Large Web Tabanlı Tank Savaşı Oyunu} \\
+    \vspace{1in}
+}
+\author{
+    \textbf{Grup Numarası: 1} \\ \\
+    Yusuf Tarlan (150619027) \\ 
+    Yusuf Eren ÇELEBİ (170424826) \\ 
+    Muhammed Kızıldağ (170423963) \\ 
+    Mhd Diaa Alsebai (170423954)
+}
+\date{\vfill \today}
+
+\begin{document}
+
+% Kapak Sayfasını Oluştur
+\maketitle
+\thispagestyle{empty} % Kapakta sayfa numarası olmasın
+\newpage
+
+% İçindekiler
+\tableofcontents
+\newpage
+
+% Sayfa numaralandırmasını başlat
+\pagenumbering{arabic}
+
+\section{Giriş}
+\section{Sistem Mimarisi}
+\section{Frontend Tasarımı}
+\section{Backend Tasarımı ve Veri Yönetimi}
+\section{Ağ Protokolleri ve Senkronizasyon}
+\section{Oyun Mekaniği ve Fizik}
+\section{Performans ve Güvenlik}
+\end{document}
