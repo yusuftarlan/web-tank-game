@@ -1,0 +1,235 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- PAKETLER ---
+\usepackage[utf8]{inputenc}
+\usepackage[turkish]{babel}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{amsmath}
+% Sayfa kenar boşlukları
+\geometry{margin=1in}
+
+% --- KAPAK SAYFASI BİLGİLERİ ---
+\title{
+    \vspace{2in}
+    \textbf{\Huge YAZILIM TASARIM DÖKÜMANI (SDD)} \\
+    \vspace{0.5in}
+    \textbf{\Large Web Tabanlı Tank Savaşı Oyunu} \\
+    \vspace{1in}
+}
+\author{
+    \textbf{Grup Numarası: 1} \\ \\
+    Yusuf Tarlan (150619027) \\ 
+    Yusuf Eren ÇELEBİ (170424826) \\ 
+    Muhammed Kızıldağ (170423963) \\ 
+    Mhd Diaa Alsebai (170423954)
+}
+\date{\vfill \today}
+
+\begin{document}
+
+% Kapak Sayfasını Oluştur
+\maketitle
+\thispagestyle{empty} % Kapakta sayfa numarası olmasın
+\newpage
+
+% İçindekiler
+\tableofcontents
+\newpage
+
+% Sayfa numaralandırmasını başlat
+\pagenumbering{arabic}
+
+\section{Giriş}
+\subsection{Projenin Amacı ve Kapsamı}
+Bu projenin temel amacı; modern web teknolojileri (HTML5, WebSocket, Node.js) kullanılarak,
+eklenti veya indirme gerektirmeyen, tarayıcı üzerinden doğrudan oynanabilen gerçek zamanlı
+(real-time) çok oyunculu bir 2D tank savaşı oyunu geliştirmektir. Proje, sadece eğlence
+odaklı bir oyun olmanın ötesinde, ağ senkronizasyonu ve durum (state) yönetimi gibi ileri
+seviye bilgisayar mühendisliği problemlerine ölçeklenebilir çözümler getirmeyi hedefler.
+\paragraph{Kapsam Dahilinde olanlar:}
+\begin{itemize}
+      \item Geçici oturum (ephemeral session) mantığıyla çalışan,
+            veritabanı bağımsız (RAM tabanlı) kullanıcı ve lobi yönetimi.
+      \item HTTP tabanlı bir "Meta Server" ile oda listeleme
+            ve eşleştirme (matchmaking) sistemi.
+      \item İstemci-sunucu mimarisini ayıran, yetkili sunucu (Authoritative Server) altyapısı.
+      \item WebSocket üzerinden düşük gecikmeli veri akışı sağlanması.
+\end{itemize}
+
+\paragraph{Kapsam Dışında Bırakılanlar:}
+
+\begin{itemize}
+      \item Kalıcı kullanıcı hesapları, şifreleme ve ilişkisel bir veritabanı (RDBMS)
+            yönetimi (sistem tamamen durumsuz/stateless çalışacak şekilde tasarlanmıştır).
+      \item 3D grafik işleme ve karmaşık yeryüzü fiziği (z ekseni).
+\end{itemize}
+
+
+\subsection{Terimler ve Kısaltmalar}
+Döküman boyunca sıklıkla kullanılacak olan teknik terimlerin ve sistem bileşenlerinin tanımları
+aşağıda listelenmiştir:
+\begin{description}
+      \item[RTT (Round Trip Time):] İstemciden sunucuya gönderilen bir veri paketinin...
+            toplam süredir. Genellikle $ms$ cinsinden ölçülür.
+
+      \item[\textbf{Tick Rate (Tik Oranı):}] Oyun sunucusunun (Game Server) oyun dünyasını
+            ve fiziksel olayları saniyede kaç kez güncellediğini ifade eden frekans değeridir.
+            Sistemimizde Tick Rate $60 \text{ Hz}$ olarak belirlenmiş olup, her bir karenin
+            (frame) işlenme süresi (Delta Time, $\Delta t$) yaklaşık olarak şu kadardır:
+            \[
+                  \Delta t = \frac{1000 \text{ ms}}{60} \approx 16.66 \text{ ms}
+            \]
+      \item[Authoritative Server (Yetkili Sunucu):] Dağıtık oyun mimarilerinde "tek gerçek"
+            (single source of truth) olarak kabul edilen sunucu modelidir. İstemciler sadece
+            "ateş et", "sağa dön" gibi girdileri (input) gönderir. Çarpışma, hız, hasar alma
+            gibi tüm kritik hesaplamalar sunucuda yapılır ve sonuçlar istemcilere yayınlanır (broadcast).
+
+      \item[Game Loop (Oyun Döngüsü):] Oyun motorunun ve mekanik sunucusunun kalbini oluşturan,
+            durmaksızın çalışan döngüdür. Her iterasyonda sırasıyla; girdiler okunur, fizik
+            (hız, yön, çarpışma) güncellenir ve yeni durum render edilmek (çizilmek) üzere hazırlanır.
+
+      \item[Meta Server (Lobi Sunucusu):] Oyunun doğrudan oynanmadığı; oyuncu girişi, oda oluşturma
+            ve sunucu atama (matchmaking) gibi işlemlerin standart HTTP (Express.js) protokolüyle
+            yönetildiği durumsuz (stateless) katmandır.
+
+      \item[Ephemeral Data (Geçici Veri):] Sabit diske veya bir veritabanına yazılmayan, sadece
+            Node.js sürecinin (process) RAM'inde yaşayan ve oyuncunun bağlantısı koptuğunda
+            yok olan veri yapılarıdır.
+\end{description}
+
+\section{Sistem Mimarisi}
+Bu proje, performans darboğazlarını engellemek ve sistem kaynaklarını optimize etmek amacıyla
+mikroservis mimarisinden ilham alan "İkili Sunucu" (Dual-Server) yapısı üzerine inşa edilmiştir.
+Sistem; oyuncu eşleştirme işlemlerini yöneten durumsuz (stateless) Meta Server ve gerçek zamanlı
+oyun fiziğini hesaplayan durumlu (stateful) Game Server olmak üzere iki ana bileşenden oluşur.
+
+\subsection{Meta Server (Lobi Katmanı) Mimarisi}
+
+Meta Server, sistemin dış dünyaya açılan ilk kapısıdır ve oyuncuların oyun (savaş) alanına
+aktarılmadan önceki tüm eşleştirme, lobi ve kimlik doğrulama süreçlerini yöneten HTTP tabanlı
+bir mikroservis olarak tasarlanmıştır. Bu katman, sürekli açık bir soket bağlantısının getirdiği
+donanım yükünü (overhead) minimize etmek amacıyla İstek-Cevap (Request-Response) döngüsüyle
+çalışacak şekilde kurgulanmıştır.
+
+\textbf{Teknoloji Yığını ve İletişim Protokolü} \\
+Sunucu, Node.js çalışma zamanı (runtime) üzerinde \textbf{Express.js} web iskeleti (framework)
+kullanılarak inşa edilmiştir. İstemci (oyuncunun tarayıcısı) ile sunucu arasındaki iletişim,
+standart RESTful HTTP/HTTPS protokolleri üzerinden sağlanmaktadır. Bu tercih, uygulamanın
+Load Balancer (Yük Dengeleyici) arkasında kolayca yatay olarak ölçeklenebilmesine (horizontal scaling)
+olanak tanır.
+
+\textbf{Hibrit Durum (Hybrid State) Yönetimi ve Geçici Oturumlar} \\
+Meta Server, kimlik doğrulama süreçleri açısından \textit{Durumsuz (Stateless)}, lobi ve
+oda yönetimi açısından ise \textit{Durumlu (Stateful)} bir hibrit mimariye sahiptir:
+\begin{itemize}
+      \item \textbf{Kimlik Doğrulama (Stateless):} Geleneksel şifreli ve veritabanı bağımlı
+            üyelik sistemleri yerine, hıza odaklı "Geçici Oturum" (Ephemeral Session) mimarisi kullanılmıştır.
+            Kullanıcılar sadece bir kullanıcı adı ile giriş yapar ve sunucu bu kullanıcıya sistem içi
+            yetkilendirmede kullanılacak tek kullanımlık bir JSON Web Token (JWT) tanımlar.
+      \item \textbf{Oda Yönetimi (Stateful):} Sunucu, aktif oda listesini harici bir veritabanı
+            (RDBMS veya NoSQL) yerine doğrudan kendi belleğinde (RAM) JavaScript \texttt{Map}
+            veri yapısı içerisinde tutar. Bu sayede disk I/O işlemlerinden kaynaklanan gecikmeler
+            ortadan kaldırılarak verilere $O(1)$ zaman karmaşıklığında erişim sağlanır.
+\end{itemize}
+
+\textbf{Temel API Uç Noktaları (Endpoints) ve İşlevleri} \\
+Lobi mimarisi, aşağıdaki temel rotalar üzerinden istemciye hizmet verir:
+\begin{itemize}
+      \item \texttt{POST /api/login}: Kullanıcı adını kabul eder, doğrular ve oturum biletini (JWT) döner.
+      \item \texttt{GET /api/rooms}: RAM üzerinde tutulan aktif ve "bekliyor" statüsündeki oda listesini
+            JSON formatında istemciye iletir.
+      \item \texttt{POST /room/create} \& \texttt{POST /room/join}: Yeni oda oluşturma ve mevcut bir
+            odaya katılma işlemlerini yönetir. Odanın maksimum oyuncu kapasitesi ($N_{max}$) gibi ön koşul
+            doğrulamaları bu uç noktalarda yapılır.
+      \item \texttt{GET /api/room/:roomId}: Oyuncu odaya (bekleme ekranına) girdiğinde, diğer oyuncuların gelip
+            gelmediğini görmek için kullanılır. Frontend, oyun başlayana kadar her 2 saniyede bir bu API'ye istek atarak
+            (Polling) odadaki güncel oyuncu listesini çeker.
+      \item \texttt{POST /api/room/start}: Odadaki gameMaster (Kurucu) "Oyunu Başlat" butonuna bastığında tetiklenir.
+            Odayı in-game statüsüne alır ve oyuncuların WebSocket (Game Server) tarafına geçmesi için gerekli olan biletleri
+            (Match Token) üretip geri döner.
+\end{itemize}
+
+\textbf{Performans Hedefleri} \\
+Veritabanı okuma/yazma işlemlerinin mimariden çıkarılması sayesinde, bir HTTP isteğinin toplam işlenme süresi ($T_{total}$), yalnızca ağ gecikmesi ($T_{network}$) ve Express.js middleware işleme süresi ($T_{processing}$) ile sınırlıdır:
+$$T_{total} = T_{network} + T_{processing}$$
+Burada $T_{processing}$ süresinin $<5\text{ ms}$ altında tutulması hedeflenmiş olup, bu durum istemci tarafında lobinin anlık (gerçek zamanlıya yakın) güncelleniyormuş hissi vermesini sağlamaktadır.
+
+\subsection{Game Server (Mekanik Katmanı) Mimarisi} % Socket.io, WebSocket akışı
+\subsection{İstemci-Sunucu İletişim Akışı (Handover Process)} % Lobiden oyuna geçişteki bilet/token mantığı
+\section{Frontend Tasarımı}
+\subsection{REST API Uç Noktaları (Endpoints) ve Veri Şemaları}
+
+Meta Server üzerinde çalışan HTTP rotalarının mantıksal işleyişi, beklediği parametreler ve döndürdüğü JSON şemaları aşağıda detaylandırılmıştır.
+
+\subsubsection{Oda Oluşturma (Create Room)}
+Bu uç nokta, oyuncunun yeni bir savaş alanı (oda) başlatmasını sağlar. İstek başarılı olduğunda, RAM üzerinde yeni bir \texttt{Room} nesnesi oluşturulur.
+
+\begin{itemize}
+      \item \textbf{URL:} \texttt{/api/room/create}
+      \item \textbf{Metod:} \texttt{POST}
+      \item \textbf{Yetkilendirme (Auth):} Bearer Token (JWT) gerektirir.
+\end{itemize}
+
+\textbf{Gelen İstek (Request Payload):}
+İstemci, oluşturulacak odanın temel ayarlarını gönderir.
+\begin{verbatim}
+{
+  "roomName": "Acemiler Giremez",
+  "maxPlayers": 4,
+  "mapId": "desert_01"
+}
+\end{verbatim}
+
+\textbf{Başarılı Yanıt (Success Response - 200 OK):}
+Sunucu, RAM'de odayı oluşturur ve benzersiz bir ID atayarak yanıt döner.
+\begin{verbatim}
+{
+  "success": true,
+  "roomId": "room_a7b9c",
+  "message": "Oda başarıyla oluşturuldu."
+}
+\end{verbatim}
+
+\textbf{Hata Durumları (Error Responses):}
+\begin{itemize}
+      \item \textbf{400 Bad Request:} Eksik veya hatalı parametre (Örn: \texttt{maxPlayers} değeri 2'den küçükse).
+      \item \textbf{401 Unauthorized:} Geçersiz veya süresi dolmuş JWT.
+\end{itemize}
+
+\subsubsection{Aktif Odaları Listeleme (Get Rooms)}
+Lobi ekranındaki oyunculara, mevcut odaların durumunu iletmek için kullanılır.
+
+\begin{itemize}
+      \item \textbf{URL:} \texttt{/api/rooms}
+      \item \textbf{Metod:} \texttt{GET}
+\end{itemize}
+
+\textbf{Başarılı Yanıt (Success Response - 200 OK):}
+RAM'de tutulan \texttt{rooms} Map nesnesi, JSON formatına serileştirilerek döndürülür. Sadece durumu \texttt{"waiting"} (oyun başlamamış) olan odalar filtrelenir.
+\begin{verbatim}
+{
+  "activeRooms": [
+    {
+      "roomId": "room_a7b9c",
+      "roomName": "Acemiler Giremez",
+      "currentPlayers": 1,
+      "maxPlayers": 4,
+      "gameMaster": "yusuf"
+    }
+  ]
+}
+\end{verbatim}
+\subsection{Oda Yönetimi ve Eşleştirme (Matchmaking)}
+\subsection{Geçici Bellek (RAM) Veri Yapıları} % JSON/Map objelerinin şemaları
+\subsection{Çöp Toplama (Garbage Collection) ve Zombi Oda Temizliği} % O(1) silme mantığı ve TTL süreci
+\section{Ağ Protokolleri ve Senkronizasyon}
+\section{Oyun Mekaniği ve Fizik}
+\section{Performans ve Güvenlik}
+\subsection{Bellek Sızıntılarını (Memory Leak) Önleme} % Disconnect anında RAM temizliği
+\subsection{Ölçeklenebilirlik (Scalability) Sınırları} % Tek Node.js instance'ının limitleri
+
+\end{document}

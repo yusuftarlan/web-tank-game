@@ -1,0 +1,26 @@
+{
+  "name": "web-tank-game",
+  "version": "1.0.0",
+  "description": "Web tabanlı online tank savaş oyunu",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yusuftarlan/web-tank-game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yusuftarlan/web-tank-game/issues"
+  },
+  "homepage": "https://github.com/yusuftarlan/web-tank-game#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "uuid": "^14.0.0"
+  }
+}
