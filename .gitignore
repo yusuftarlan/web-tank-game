@@ -1,0 +1,33 @@
+# Bağımlılıklar (Kesinlikle yüklenmemeli, 'npm install' ile tekrar indirilir)
+node_modules/
+
+# Ortam Değişkenleri ve Gizli Anahtarlar (Güvenlik için)
+.env
+.env.test
+.env.production
+.env.local
+
+# npm ve yarn hata logları
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# İşletim Sistemi dosyaları (Gereksiz kalabalık)
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# İleride eklenebilecek derleme (build) klasörleri
+dist/
+build/
+out/
+
+# IDE ve Editör klasörleri
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
