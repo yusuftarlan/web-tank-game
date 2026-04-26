@@ -161,7 +161,48 @@ Burada $T_{processing}$ süresinin $<5\text{ ms}$ altında tutulması hedeflenmi
 \subsection{Game Server (Mekanik Katmanı) Mimarisi} % Socket.io, WebSocket akışı
 \subsection{İstemci-Sunucu İletişim Akışı (Handover Process)} % Lobiden oyuna geçişteki bilet/token mantığı
 \section{Frontend Tasarımı}
-\subsection{REST API Uç Noktaları (Endpoints) ve Veri Şemaları}
+\section{Backend Tasarımı}
+
+\subsection{RAM Tabanlı Veri Yapıları ve Şemalar (Data Schemas)}
+
+Sistemde harici bir veritabanı (RDBMS veya NoSQL) bulunmadığından, uygulamanın tüm durumu (state) Node.js
+sürecinin belleğinde (RAM) JavaScript'in yerleşik veri yapıları olan \texttt{Map} ve \texttt{Set} objeleri
+ile yönetilmektedir. Bu tercih, verilere ortalama $\mathcal{O}(1)$ zaman karmaşıklığında erişilmesini sağlar.
+
+Sistemdeki temel veri yapıları üç ana gruba ayrılır: Oturum Verileri, Lobi/Oda Verileri ve Oyun İçi Dinamik Veriler.
+
+\subsubsection{Oturum ve Kimlik Yönetimi Verileri}
+Kullanıcı giriş yaptığında oluşan ve oyuncunun sistemdeki varlığını temsil eden veri yapılarıdır.
+
+\textbf{A. \texttt{activeUsernames} (Veri Tipi: \texttt{Set})}
+\begin{itemize}
+      \item \textbf{Amacı:} Sisteme giriş yapmış kullanıcı adlarının benzersizlik (unique) kontrolünü milisaniyeler içinde yapmak.
+      \item \textbf{İçerik:} \texttt{["yusuf", "eren\_tank", "player1"]}
+\end{itemize}
+
+\textbf{B. \texttt{activeSessions} (Veri Tipi: \texttt{Map})}
+\begin{itemize}
+      \item \textbf{Amacı:} Kullanıcının sahip olduğu oturum bileti (Token) ile kimlik bilgilerini eşleştirmek. Yetkilendirme (Authorization) işlemlerinde kullanılır.
+      \item \textbf{Anahtar (Key):} \texttt{Token} (UUID formatında, örn: "1b9d6bcd...")
+      \item \textbf{Değer (Value) Şeması:}
+\end{itemize}
+\begin{verbatim}
+{
+  "username": "yusuf",
+  "joinedAt": 1714300000000, // Giriş yapılan Unix zaman damgası
+  "currentRoom": "room_a1b2" // Oyuncu bir odadaysa ID'si, değilse null
+}
+\end{verbatim}
+
+
+
+\subsubsection{Çöp Toplama ve Bellek Temizleme Politikası}
+RAM şişmesini engellemek için sistemde iki temel kural uygulanır:
+\begin{enumerate}
+      \item \textbf{Bağlantı Kopması (Disconnect):} Socket veya HTTP üzerinden bir oyuncu ayrıldığında, oyuncunun bilgileri \texttt{activeUsernames} ve \texttt{activeSessions} üzerinden $\mathcal{O}(1)$ maliyetle anında silinir (Örn: \texttt{activeSessions.delete(token)}).
+      \item \textbf{Zombi Odalar:} Durumu "waiting" olan ancak $T_{su\_an} - T_{createdAt} > 3600\text{ sn}$ (1 saat) şartını sağlayan odalar, \texttt{setInterval} ile çalışan bir arka plan temizleyicisi tarafından periyodik olarak bellekten atılır.
+\end{enumerate}
+\subsection{REST API Uç Noktaları (Endpoints)}
 
 Meta Server üzerinde çalışan HTTP rotalarının mantıksal işleyişi, beklediği parametreler ve döndürdüğü JSON şemaları aşağıda detaylandırılmıştır.
 
