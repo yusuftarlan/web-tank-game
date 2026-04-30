@@ -269,6 +269,96 @@ RAM'de tutulan \texttt{rooms} Map nesnesi, JSON formatına serileştirilerek dö
 \subsection{Çöp Toplama (Garbage Collection) ve Zombi Oda Temizliği} % O(1) silme mantığı ve TTL süreci
 \section{Ağ Protokolleri ve Senkronizasyon}
 \section{Oyun Mekaniği ve Fizik}
+Bu bölüm, tankların hareket kabiliyetlerini, mermi fiziğini ve oyun dünyasındaki nesnelerin birbirleriyle olan etkileşimlerini yöneten matematiksel modelleri ve algoritmaları detaylandırır.
+
+\subsection{Tank Hareket Mekaniği}
+Tanklar, 2B düzlemde vektörel bir hareket modeline sahiptir. Her tankın anlık durumu; pozisyon ($x, y$) ve gövde açısı ($\theta$) bileşenleri ile tanımlanır.
+
+\begin{itemize}
+    \item \textbf{Doğrusal Hareket:} Sunucu, istemciden gelen "ileri" veya "geri" girdi paketini aldığında tankın yeni pozisyonunu şu trigonometrik formüllerle hesaplar:
+    \begin{align*}
+        x_{yeni} &= x_{eski} + (v \cdot \cos(\theta) \cdot \Delta t) \\
+        y_{yeni} &= y_{eski} + (v \cdot \sin(\theta) \cdot \Delta t)
+    \end{align*}
+    Burada $v$ tankın doğrusal hızını, $\Delta t$ ise her bir sunucu tikinin (yaklaşık $16.66 \text{ ms}$) süresini temsil eder.
+    
+    \item \textbf{Açısal Hareket (Rotasyon):} Tankın kendi ekseni etrafında dönme hızı $\omega$ (radyan/sn) sabittir. Dönüş girdisi alındığında açısal değişim şu şekilde işlenir:
+    \[ \theta_{yeni} = \theta_{eski} + (\omega \cdot \text{input}_{yön} \cdot \Delta t) \]
+\end{itemize}
+
+
+\subsection{Mermi Fiziği ve Balistik}
+Mermiler, ateşlendiği andaki tankın doğrultusunda fırlatılan ve yerçekiminden etkilenmeyen (üstten görünüm nedeniyle) doğrusal nesnelerdir.
+
+\begin{itemize}
+    \item \textbf{İnitialization (Başlatma):} Mermi nesnesi, tankın namlu ucu koordinatlarında ($x_{namlu}, y_{namlu}$) oluşturulur ve tankın o anki $\theta$ açısına sahip olur.
+    \item \textbf{Kinematik Güncelleme:} Mermiler, tank hızından bağımsız sabit bir $v_{projectile}$ hızına sahiptir. Sunucu her tick içerisinde mermi konumunu günceller ve harita sınırları dışına çıkan mermileri bellekten ($O(1)$ maliyetle) siler.
+\end{itemize}
+
+
+\subsection{Çarpışma Algılama (Collision Detection)}
+Sistemde performans ve hassasiyet dengesini korumak adına iki katmanlı bir çarpışma kontrolü uygulanmaktadır:
+
+\begin{enumerate}
+    \item \textbf{AABB (Axis-Aligned Bounding Box):} Tanklar ve dikdörtgen engeller için kullanılır. İki nesnenin kesişimi, $x$ ve $y$ eksenleri üzerindeki izdüşümlerinin çakışmasıyla kontrol edilir.
+    \item \textbf{Daire-Kutu Çarpışması (Mermiler için):} Mermiler küçük olduğu için daire olarak kabul edilir. Mermi merkezi ile en yakın engel noktası arasındaki Öklid uzaklığı ($d$), mermi yarıçapından ($r$) küçükse çarpışma tetiklenir:
+    \[ \sqrt{(x_{mermi} - x_{engel})^2 + (y_{mermi} - y_{engel})^2} < r \]
+\end{enumerate}
+
+
+\subsection{Hasar ve Sağlık Sistemi (Health System)}
+Bir mermi bir tanka çarptığında sunucu şu mantıksal sırayı izler:
+\begin{itemize}
+    \item Mermi nesnesi sunucu belleğinden silinir.
+    \item Hedef tankın \texttt{health} değişkeninden merminin \texttt{damage} puanı düşülür.
+    \item Eğer $\text{health} \leq 0$ ise; tank yok edilmiş olarak işaretlenir, saldırgan oyuncunun skoru artırılır ve yeni haritaya geçilir.
+\end{itemize}
+
+
+\subsection{Dinamik Harita ve Döngüsel Fizik}
+Oyun, statik bir harita yerine her tur başında veya oyuncu ölümlerinde tetiklenen rastgele harita sistemine sahiptir.
+
+\begin{itemize}
+    \item \textbf{Harita Değişimi:} Bir oyuncu imha edildiğinde (\texttt{health} $\leq 0$), sunucu mevcut oturum için yeni bir rastgele engel dizilimi ($\mathcal{M}_{new}$) üretir ve tüm istemcilere yeni koordinat verilerini yayınlar.
+    \item \textbf{Sınır Kontrolü:} Harita sınırları katı bariyerler olarak tanımlanmıştır. Tankın yeni hesaplanan koordinatı harita genişliği $W$ veya yüksekliği $H$ dışındaysa, hareket vektörü sınıra sabitlenir.
+\end{itemize}
+
+
+\subsection{Özel Güçler (Power-Ups) ve Nesne Fiziği}
+Haritanın rastgele koordinatlarında, tankın ateşleme ve savunma özelliklerini geçici olarak değiştiren özel güçlendirmeler bulunur.
+
+\begin{itemize}
+    \item \textbf{Güdümlü Füze (Homing Missile):} Mermi vektörü $\vec{v}$, her tick'te en yakın düşman tankının $\vec{p}_{target}$ konumuna doğru belirli bir $\alpha$ yönelme katsayısı ile güncellenir:
+    \[ \vec{v}_{next} = \text{Normalize}(\vec{v}_{curr} + (\vec{p}_{target} - \vec{p}_{curr}) \cdot \alpha) \cdot v_{max} \]
+    \item \textbf{Taramalı Tüfek (Rapid Fire):} Ateşleme döngüsündeki $\Delta t_{cooldown}$ süresi \%75 oranında azaltılarak saniyedeki mermi çıkış hızı artırılır.
+    \item \textbf{Duvar Delen Mermi (Ghost Bullet):} Çarpışma algılama algoritmasında merminin \texttt{isGhost} bayrağı kontrol edilir. Eğer aktifse, mermi statik engel (AABB) kontrollerini pas geçer ve sadece tank nesneleriyle etkileşime girer.
+    \item \textbf{Hiper Motor (Turbo Drive):} Tankın doğrusal hareket hızını ($v$) ve açısal dönüş hızını ($\omega$) geçici bir süreliğine \%50 oranında artıran bir güçlendiricidir. Bu mod aktifken, sunucu tarafındaki fizik döngüsünde tankın birim zamandaki yer değiştirme katsayısı güncellenir:
+    \begin{align*}
+        v_{turbo} &= v_{base} \cdot 1.5 \\
+        \omega_{turbo} &= \omega_{base} \cdot 1.5
+    \end{align*}
+    Bu özellik, oyuncuya hem saldırıdan kaçma hem de rakipleri çevreleme (flanking) konusunda stratejik avantaj sağlar.
+\end{itemize}
+
+\subsection{Gelişmiş Mermi ve Balistik Modelleri}
+Mermi türlerine göre fizik motoru farklı çarpışma ve yayılma algoritmaları çalıştırır:
+
+\begin{itemize}
+    \item \textbf{Alan Hasarlı Bomba (AOE Explosion):} Mermi bir yüzeye çarptığında $R_{explosion}$ yarıçapında bir etki alanı oluşturur. Hasar, merkeze olan uzaklık ($d$) ile ters orantılıdır:
+    \[ \text{Damage} = \text{BaseDamage} \cdot (1 - \frac{d}{R_{explosion}}) \]
+    \item \textbf{Şarapnel Bombası (Cluster Bomb):} Çarpışma anında mermi yok edilir ve çarpışma merkezinden $n$ adet düşük hasarlı mermi, $360^{\circ}$ açısal dağılımla ($\frac{2\pi}{n}$) fırlatılır.
+    \item \textbf{Seken Mermi (Bouncing Bullet):} Mermi bir engele çarptığında yok edilmek yerine, engelin normal vektörü ($\vec{n}$) üzerinden yansıma (Reflection) formülüyle yeni yönünü alır:
+    \[ \vec{v}_{reflect} = \vec{v} - 2(\vec{v} \cdot \vec{n})\vec{n} \]
+\end{itemize}
+
+\subsection{Hasar ve Respawn Mekanizması}
+Sunucu tarafında yönetilen hasar sistemi şu adımları izler:
+\begin{itemize}
+    \item Çarpışma algılandığında mermi türüne göre hasar hesaplanır ve hedef tankın \texttt{health} puanından düşülür.
+    \item Ölüm gerçekleştiğinde (\texttt{health} $\leq 0$), saldırganın skoru güncellenir ve sunucu anında yeni bir rastgele harita şeması üreterek tüm oyuncuları "Yeni Tur" durumuna sokar[.
+\end{itemize}
+
+
 \section{Performans ve Güvenlik}
 \subsection{Bellek Sızıntılarını (Memory Leak) Önleme} % Disconnect anında RAM temizliği
 \subsection{Ölçeklenebilirlik (Scalability) Sınırları} % Tek Node.js instance'ının limitleri
