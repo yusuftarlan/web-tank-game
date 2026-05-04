@@ -161,6 +161,49 @@ Burada $T_{processing}$ süresinin $<5\text{ ms}$ altında tutulması hedeflenmi
 \subsection{Game Server (Mekanik Katmanı) Mimarisi} % Socket.io, WebSocket akışı
 \subsection{İstemci-Sunucu İletişim Akışı (Handover Process)} % Lobiden oyuna geçişteki bilet/token mantığı
 \section{Frontend Tasarımı}
+Frontend mimarisi, tarayıcı kaynaklarını verimli kullanarak akıcı bir oyun deneyimi sunmak üzere tasarlanmıştır. Bu bölüm; teknoloji seçimi, render döngüsü ve ağ senkronizasyonu detaylarını kapsar.
+
+\subsection{Teknoloji Yığını ve Modüler Yapı}
+İstemci tarafı, modern web standartları ve modüler JavaScript yapısı üzerine kuruludur:
+\begin{itemize}
+    \item \textbf{HTML5 Canvas API:} Donanım hızlandırmalı (Hardware Accelerated) 2D çizim için kullanılır. Her karede ($60 \text{ fps}$) tüm oyun nesneleri bu katman üzerinde render edilir.
+    \item \textbf{Socket.io-client:} Sunucu ile düşük gecikmeli, olay tabanlı iletişim sağlar.
+    \item \textbf{Tailwind CSS:} Oyun dışı arayüzlerin (lobiler, menüler) hızlı ve duyarlı tasarımı için kullanılır.
+    \item \textbf{State Store (Local):} Oyunun anlık durumunu (\texttt{gameState}) bellekte tutan, sunucudan gelen paketlerle güncellenen merkezi bir nesne yapısıdır.
+\end{itemize}
+
+\subsection{Render Hattı (Rendering Pipeline)}
+Görüntü kalitesini artırmak ve işlemci yükünü azaltmak için katmanlı bir çizim stratejisi izlenir:
+\begin{itemize}
+    \item \textbf{Arka Plan Katmanı:} Statik harita verileri ve engeller bir kez çizilip "off-screen canvas" üzerinde önbelleğe alınır.
+    \item \textbf{Dinamik Katman:} Hareketli tanklar, mermiler ve özel güçler her karede yeniden çizilir.
+    \item \textbf{Parçacık Sistemi (Particle System):} Patlamalar ve motor dumanı gibi efektler için kısa ömürlü nesnelerden oluşan hafif bir alt sistem çalışır.
+    \item \textbf{Arayüz (HUD) Katmanı:} HTML/CSS kullanılarak Canvas üzerine bindirilen (overlay), anlık veri gösteren katmandır.
+\end{itemize}
+
+\subsection{Gelişmiş Ağ Senkronizasyon Teknikleri}
+İstemci, sunucudaki fizik döngüsüyle senkronize kalmak için şu algoritmaları çalıştırır:
+\begin{itemize}
+    \item \textbf{Client-Side Prediction (Tahmin):} Kullanıcı hareket girdiğini gönderdiği anda, yerel tank sunucudan onay beklemeden hareket ettirilir. Bu, $RTT$ kaynaklı gecikme hissini yok eder.
+    \item \textbf{Server Reconciliation (Mutabakat):} Sunucudan gelen kesin konum verisi, yerel tahminlerle uyuşmuyorsa, tankın konumu "yumuşak bir geçişle" sunucunun bildirdiği noktaya düzeltilir.
+    \item \textbf{Entity Interpolation (Enterpolasyon):} Diğer oyuncuların verileri ağ paketleri arasındaki boşluklarda ($16.66 \text{ ms}$) doğrusal (linear) olarak tahmin edilir. Böylece rakiplerin hareketi kesikli değil, akıcı görünür.
+\end{itemize}
+
+\subsection{Varlık (Asset) Yönetimi ve Yükleme}
+Oyun başlamadan önce gerekli tüm grafik varlıkları belleğe alınır:
+\begin{itemize}
+    \item \textbf{Preloader:} Resim ve ses dosyaları yüklenmeden "Başla" butonu aktif edilmez.
+    \item \textbf{Sprite Sheets:} Tüm tank varyasyonları ve mermi tipleri tek bir büyük resim dosyasında (atlas) tutulur. Bu, GPU üzerindeki "draw call" sayısını azaltarak performansı artırır.
+\end{itemize}
+
+\subsection{Kullanıcı Deneyimi (HUD ve Menüler)}
+\begin{itemize}
+    \item \textbf{Leaderboard:} Ekranın köşesinde, WebSocket üzerinden gelen "kill-count" verileriyle anlık güncellenen liste.
+    \item \textbf{Dinamik Can Barları:} Her tankın üzerinde, tankın koordinatlarını takip eden mini ilerleme çubukları.
+    \item \textbf{Lag Göstergesi:} İstemci ve sunucu arasındaki RTT süresini görsel olarak kullanıcıya sunan sinyal göstergesi.
+\end{itemize}
+
+
 \section{Backend Tasarımı}
 
 \subsection{RAM Tabanlı Veri Yapıları ve Şemalar (Data Schemas)}
