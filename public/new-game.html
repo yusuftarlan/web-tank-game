@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Tank Game - Yeni Oyun</title>
+</head>
+<body>
+    <main>
+        <section>
+            <h1>Yeni Oyun Olustur</h1>
+            <p id="new-game-message"></p>
+        </section>
+
+        <form id="new-game-form">
+            <div>
+                <label for="room-name">Oyun Adi</label>
+                <input id="room-name" name="roomName" type="text" autocomplete="off">
+            </div>
+
+            <div>
+                <label for="max-players">Max Player Sayisi</label>
+                <input id="max-players" name="maxPlayers" type="number" min="2" value="4">
+            </div>
+
+            <button type="submit">Olustur</button>
+            <button id="back-button" type="button">Geri Don</button>
+        </form>
+    </main>
+    <script src="/js/new-game.js"></script>
+</body>
+</html>

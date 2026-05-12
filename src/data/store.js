@@ -1,7 +1,7 @@
-const activeSessions = new Map();
+export const activeSessions = new Map();
 
-// Hızlı benzersizlik (unique) kontrolü için sadece isimleri tutar
-const activeUsernames = new Set();
+// Hizli benzersizlik (unique) kontrolu icin sadece isimleri tutar.
+export const activeUsernames = new Set();
 
-// İleride odaları tutacağımız Map
-const rooms = new Map();
+// Oda bilgileri RAM uzerinde tutulur.
+export const rooms = new Map();

@@ -1,0 +1,22 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: #f5f5f5;
+}
+
+#game-root {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+}
+
+#game-canvas {
+    max-width: 100%;
+    border: 1px solid #444;
+    background: #202020;
+}
+
+#game-hud {
+    margin-top: 12px;
+}

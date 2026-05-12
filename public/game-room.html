@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Tank Game - Oyun Odasi</title>
+</head>
+<body>
+    <main>
+        <section>
+            <h1 id="room-name">Oyun Odasi</h1>
+            <p id="room-message">Oda bilgileri yukleniyor...</p>
+        </section>
+
+        <section>
+            <p>Oda ID: <span id="room-id"></span></p>
+            <p>Game Master: <span id="game-master"></span></p>
+            <p>Oyuncular: <span id="players-count"></span></p>
+        </section>
+
+        <section>
+            <button id="start-game-button" type="button">Oyunu Baslat</button>
+            <button id="leave-room-button" type="button">Cik</button>
+        </section>
+    </main>
+    <script src="/js/game-room.js"></script>
+</body>
+</html>
