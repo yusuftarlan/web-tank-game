@@ -1,6 +1,8 @@
 # Bağımlılıklar (Kesinlikle yüklenmemeli, 'npm install' ile tekrar indirilir)
 node_modules/
 
+public/assets/a
+
 # Ortam Değişkenleri ve Gizli Anahtarlar (Güvenlik için)
 .env
 .env.test

@@ -3,26 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Tank Game - Oyun Odasi</title>
+    <title>Web Tank Game - Oda Oluştur</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <main>
-        <section>
-            <h1 id="room-name">Oyun Odasi</h1>
-            <p id="room-message">Oda bilgileri yukleniyor...</p>
-        </section>
+<body class="bg-slate-900 flex items-center justify-center h-screen text-slate-100 font-sans">
+    
+    <main class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-[28rem] relative">
+        <div class="absolute -top-4 -left-4 w-24 h-24 bg-emerald-500 rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
 
-        <section>
-            <p>Oda ID: <span id="room-id"></span></p>
-            <p>Game Master: <span id="game-master"></span></p>
-            <p>Oyuncular: <span id="players-count"></span></p>
-        </section>
-
-        <section>
-            <button id="start-game-button" type="button">Oyunu Baslat</button>
-            <button id="leave-room-button" type="button">Cik</button>
-        </section>
+        <h1 class="text-2xl font-bold mb-8 text-emerald-400 border-b border-slate-700 pb-3 flex items-center gap-2">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
+            YENİ CEPHE OLUŞTUR
+        </h1>
+        
+        <form id="create-room-form" class="space-y-6">
+            <div>
+                <label for="roomName" class="block text-sm font-medium text-slate-400 mb-2">Oda (Cephe) Adı</label>
+                <input id="roomName" name="roomName" type="text" autocomplete="off" 
+                    class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-white placeholder-slate-600" 
+                    placeholder="Örn: Alfa Takımı" required>
+            </div>
+            
+            <div>
+                <label for="maxPlayers" class="block text-sm font-medium text-slate-400 mb-2">Maksimum Kapasite</label>
+                <div class="relative">
+                    <select id="maxPlayers" name="maxPlayers" 
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition appearance-none text-white cursor-pointer">
+                        <option value="2">2 Komutan (Düello)</option>
+                        <option value="3">3 Komutan (Karmaşa)</option>
+                        <option value="4" selected>4 Komutan (Tam Savaş)</option>
+                    </select>
+                    <!-- Özel ok işareti -->
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex gap-4 pt-4 mt-8 border-t border-slate-700">
+                <a href="/main-menu" class="flex-1 bg-slate-700 hover:bg-slate-600 text-center text-white font-bold py-3 px-4 rounded-lg transition border border-slate-600 hover:border-slate-500">
+                    İPTAL ET
+                </a>
+                <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg shadow-emerald-900 hover:shadow-emerald-700">
+                    ODAYI KUR
+                </button>
+            </div>
+        </form>
+        <p id="error-message" aria-live="polite" class="mt-4 text-sm text-red-400 hidden text-center bg-red-900/30 py-2 rounded"></p>
     </main>
-    <script src="/js/game-room.js"></script>
+
+    <script src="/js/new-game.js"></script>
 </body>
 </html>
