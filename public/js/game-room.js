@@ -4,6 +4,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const roomId = urlParams.get('roomId');
 const token = sessionStorage.getItem('token');
 const currentUsername = sessionStorage.getItem('username');
+let isLeavingRoom = false;
 
 // Güvenlik kontrolü
 if (!token || !roomId) {
@@ -14,6 +15,8 @@ document.getElementById('room-id').textContent = roomId;
 
 // Sunucudan odanın son durumunu çeken fonksiyon
 async function fetchRoomDetails() {
+    if (isLeavingRoom) return;
+
     try {
         const response = await fetch(`/api/rooms/${roomId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -80,8 +83,42 @@ document.getElementById('start-game-btn').addEventListener('click', async (e) =>
 });
 
 // Merkeze Dön Butonu
-document.getElementById('leave-room-btn').addEventListener('click', () => {
-    window.location.href = '/main-menu';
+document.getElementById('leave-room-btn').addEventListener('click', async () => {
+    if (isLeavingRoom) return;
+
+    isLeavingRoom = true;
+    const leaveBtn = document.getElementById('leave-room-btn');
+    const messageEl = document.getElementById('room-message');
+
+    leaveBtn.disabled = true;
+    leaveBtn.textContent = 'CIKILIYOR...';
+
+    try {
+        const response = await fetch(`/api/rooms/${roomId}/leave`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            window.location.href = '/main-menu';
+            return;
+        }
+
+        isLeavingRoom = false;
+        leaveBtn.disabled = false;
+        leaveBtn.textContent = 'MERKEZE DON';
+        messageEl.textContent = data.error || 'Odadan cikilamadi.';
+        messageEl.classList.remove('hidden');
+    } catch (err) {
+        console.error('Odadan cikilamadi:', err);
+        isLeavingRoom = false;
+        leaveBtn.disabled = false;
+        leaveBtn.textContent = 'MERKEZE DON';
+        messageEl.textContent = 'Sunucuyla iletisim kurulamadigi icin odadan cikilamadi.';
+        messageEl.classList.remove('hidden');
+    }
 });
 
 // 2 saniyede bir odayı güncelle (Yeni biri katılırsa veya oyun başlarsa görmek için)

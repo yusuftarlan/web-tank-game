@@ -3,55 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Tank Game - Oda Oluştur</title>
+    <title>Web Tank Game - Bekleme Odasi</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 flex items-center justify-center h-screen text-slate-100 font-sans">
-    
-    <main class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-[28rem] relative">
-        <div class="absolute -top-4 -left-4 w-24 h-24 bg-emerald-500 rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+    <main class="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center px-4 py-8">
+        <section class="rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div class="flex flex-col gap-4 border-b border-slate-700 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-emerald-400">Bekleme Odasi</p>
+                    <h1 id="room-name" class="mt-2 text-2xl font-bold text-white">Oda yukleniyor...</h1>
+                    <p class="mt-2 text-sm text-slate-400">
+                        Oda ID:
+                        <span id="room-id" class="font-mono text-slate-200"></span>
+                    </p>
+                </div>
 
-        <h1 class="text-2xl font-bold mb-8 text-emerald-400 border-b border-slate-700 pb-3 flex items-center gap-2">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
-            YENİ CEPHE OLUŞTUR
-        </h1>
-        
-        <form id="create-room-form" class="space-y-6">
-            <div>
-                <label for="roomName" class="block text-sm font-medium text-slate-400 mb-2">Oda (Cephe) Adı</label>
-                <input id="roomName" name="roomName" type="text" autocomplete="off" 
-                    class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-white placeholder-slate-600" 
-                    placeholder="Örn: Alfa Takımı" required>
-            </div>
-            
-            <div>
-                <label for="maxPlayers" class="block text-sm font-medium text-slate-400 mb-2">Maksimum Kapasite</label>
-                <div class="relative">
-                    <select id="maxPlayers" name="maxPlayers" 
-                        class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition appearance-none text-white cursor-pointer">
-                        <option value="2">2 Komutan (Düello)</option>
-                        <option value="3">3 Komutan (Karmaşa)</option>
-                        <option value="4" selected>4 Komutan (Tam Savaş)</option>
-                    </select>
-                    <!-- Özel ok işareti -->
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
+                <div class="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-right">
+                    <p class="text-xs uppercase text-slate-500">Oyuncular</p>
+                    <p class="mt-1 text-xl font-bold">
+                        <span id="player-count">0</span>/<span id="max-players">0</span>
+                    </p>
                 </div>
             </div>
-            
-            <div class="flex gap-4 pt-4 mt-8 border-t border-slate-700">
-                <a href="/main-menu" class="flex-1 bg-slate-700 hover:bg-slate-600 text-center text-white font-bold py-3 px-4 rounded-lg transition border border-slate-600 hover:border-slate-500">
-                    İPTAL ET
-                </a>
-                <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg shadow-emerald-900 hover:shadow-emerald-700">
-                    ODAYI KUR
+
+            <div class="py-6">
+                <h2 class="mb-3 text-sm font-bold uppercase tracking-wider text-slate-400">Komutanlar</h2>
+                <ul id="player-list" class="space-y-3">
+                    <li class="rounded border border-slate-700 bg-slate-800 p-3 text-slate-400">
+                        Oyuncular yukleniyor...
+                    </li>
+                </ul>
+            </div>
+
+            <p id="room-message" class="hidden rounded-lg border border-amber-800 bg-amber-950/40 px-4 py-3 text-sm text-amber-300"></p>
+
+            <div class="mt-6 flex flex-col gap-3 border-t border-slate-700 pt-5 sm:flex-row">
+                <button id="leave-room-btn" type="button" class="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 font-bold text-white transition hover:bg-slate-700">
+                    MERKEZE DON
+                </button>
+                <button id="start-game-btn" type="button" class="flex-1 rounded-lg bg-emerald-600 px-4 py-3 font-bold text-white shadow-lg shadow-emerald-950 transition hover:bg-emerald-500">
+                    SAVASI BASLAT
                 </button>
             </div>
-        </form>
-        <p id="error-message" aria-live="polite" class="mt-4 text-sm text-red-400 hidden text-center bg-red-900/30 py-2 rounded"></p>
+        </section>
     </main>
 
-    <script src="/js/new-game.js"></script>
+    <script src="/js/game-room.js"></script>
 </body>
 </html>
