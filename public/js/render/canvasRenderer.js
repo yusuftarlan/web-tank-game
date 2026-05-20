@@ -1,6 +1,16 @@
 // public/js/render/canvasRenderer.js
 import { getImage } from '../assets/assetLoader.js'; // Görselleri alabilmek için import ettik
 
+const ITEM_VISUALS = {
+    'HOMING_MISSILE': { emoji: '🎯', color: '#ff4757' },
+    'RAPID_FIRE': { emoji: '🔫', color: '#ffa502' },
+    'GHOST_BULLET': { emoji: '👻', color: '#747d8c' },
+    'TURBO_DRIVE': { emoji: '⚡', color: '#1e90ff' },
+    'AOE_EXPLOSION': { emoji: '💣', color: '#ff6348' },
+    'CLUSTER_BOMB': { emoji: '💥', color: '#ff7f50' },
+    'BOUNCING_BULLET': { emoji: '🪃', color: '#2ed573' }
+};
+
 export function createCanvasRenderer(canvas) {
     const context = canvas.getContext('2d');
 
@@ -22,7 +32,30 @@ export function createCanvasRenderer(canvas) {
                 });
             }
 
-            // 2. OYUNCULARI (TANKLARI) ÇİZ
+            // 2. ÖZEL GÜÇLERİ VE MERMİLERİ ÇİZ (ITEMS)
+            if (gameState.activeItems) {
+                gameState.activeItems.forEach(item => {
+                    const visual = ITEM_VISUALS[item.type] || { emoji: '❓', color: '#ffffff' };
+                    const radius = item.radius || 15;
+
+                    context.beginPath();
+                    context.arc(item.x, item.y, radius, 0, Math.PI * 2);
+                    context.fillStyle = visual.color;
+                    context.fill();
+                    
+                    context.lineWidth = 2;
+                    context.strokeStyle = '#2f3542';
+                    context.stroke();
+                    context.closePath();
+
+                    context.font = `${radius}px Arial`;
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillText(visual.emoji, item.x, item.y + 1); 
+                });
+            }
+
+            // 3. OYUNCULARI (TANKLARI) ÇİZ
             gameState.players.forEach(player => {
                 context.save();
                 context.translate(player.x, player.y);
@@ -68,7 +101,7 @@ export function createCanvasRenderer(canvas) {
                 context.fillText(player.username, player.x, player.y - 30);
             });
 
-            // 3. MERMİLERİ ÇİZ
+            // 4. MERMİLERİ ÇİZ
             gameState.bullets.forEach(bullet => {
                 context.save();
                 context.translate(bullet.x, bullet.y);
