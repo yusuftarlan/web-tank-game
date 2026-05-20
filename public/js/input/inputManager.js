@@ -8,8 +8,11 @@ const inputState = {
     right: false,
     mouseX: 0,
     mouseY: 0,
-    isShooting: false
+    isShooting: false,
+    reloadRequested: false
 };
+
+let reloadKeyHeld = false;
 
 /**
  * Klavye ve fare dinleyicilerini (event listener) başlatır.
@@ -67,6 +70,12 @@ function handleKey(keyCode, isPressed) {
         case 'ArrowRight':
             inputState.right = isPressed;
             break;
+        case 'KeyR':
+            if (isPressed && !reloadKeyHeld) {
+                inputState.reloadRequested = true;
+            }
+            reloadKeyHeld = isPressed;
+            break;
     }
 }
 
@@ -76,5 +85,7 @@ function handleKey(keyCode, isPressed) {
  */
 export function getInputState() {
     // Referans sorunlarını önlemek için objenin bir kopyasını döndürüyoruz
-    return { ...inputState };
+    const snapshot = { ...inputState };
+    inputState.reloadRequested = false;
+    return snapshot;
 }

@@ -1,5 +1,6 @@
 // public/js/render/canvasRenderer.js
 import { getImage } from '../assets/assetLoader.js'; 
+import { CAMERA_ZOOM } from './cameraConfig.js';
 
 const ITEM_VISUALS = {
     'HOMING_MISSILE': { emoji: '🎯', color: '#ff4757' },
@@ -12,24 +13,36 @@ const ITEM_VISUALS = {
     'SHIELD': { emoji: '🛡️', color: '#3498db'}
 };
 
+const SPRITE_UP_TO_RIGHT_OFFSET = Math.PI / 2;
+const ROTATION_SMOOTHING = 0.35;
+
+function normalizeAngle(angle) {
+    return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function smoothAngle(current, target) {
+    if (!Number.isFinite(current)) return target;
+    return normalizeAngle(current + normalizeAngle(target - current) * ROTATION_SMOOTHING);
+}
+
 export function createCanvasRenderer(canvas) {
     const context = canvas.getContext('2d');
+    const playerRenderAngles = new Map();
 
     return {
-        render(gameState, activeExplosions = [], localPlayerUsername) {
+        render(gameState, activeExplosions = [], localPlayerUsername, feedback = {}) {
             context.clearRect(0, 0, canvas.width, canvas.height);
 
             // Yerel oyuncuyu bul (Kamera odağı için)
             const localPlayer = gameState.players.find(p => p.username === localPlayerUsername);
+            const cameraShake = feedback.cameraShake || { x: 0, y: 0 };
             
             context.save();
             
             if (localPlayer) {
-                const zoom = 1.75; // Haritayı ne kadar yakınlaştırmak istediğin (Değiştirebilirsin)
-                
                 // Kamerayı oyuncunun üzerine merkezle
-                context.translate(canvas.width / 2, canvas.height / 2);
-                context.scale(zoom, zoom);
+                context.translate(canvas.width / 2 + cameraShake.x, canvas.height / 2 + cameraShake.y);
+                context.scale(CAMERA_ZOOM, CAMERA_ZOOM);
                 context.translate(-localPlayer.x, -localPlayer.y);
             }
 
@@ -82,7 +95,21 @@ export function createCanvasRenderer(canvas) {
             }
 
             // 3. OYUNCULARI (TANKLARI) ÇİZ
+            const visiblePlayerKeys = new Set();
+
             gameState.players.forEach(player => {
+                const playerKey = player.id || player.username;
+                visiblePlayerKeys.add(playerKey);
+
+                const previousAngles = playerRenderAngles.get(playerKey) || {};
+                const displayBodyRotation = smoothAngle(previousAngles.rotation, player.rotation || 0);
+                const displayTurretRotation = smoothAngle(previousAngles.turretRotation, player.turretRotation || 0);
+
+                playerRenderAngles.set(playerKey, {
+                    rotation: displayBodyRotation,
+                    turretRotation: displayTurretRotation
+                });
+
                 context.save();
                 context.translate(player.x, player.y);
 
@@ -117,11 +144,12 @@ export function createCanvasRenderer(canvas) {
 
                 // Tank Gövdesi
                 context.save();
-                context.rotate(player.rotation);
                 const tankImg = getImage(`tank-${player.color}`);
                 if (tankImg && tankImg.complete && tankImg.naturalWidth !== 0) {
+                    context.rotate(displayBodyRotation + SPRITE_UP_TO_RIGHT_OFFSET);
                     context.drawImage(tankImg, -25, -25, 50, 50);
                 } else {
+                    context.rotate(displayBodyRotation);
                     context.fillStyle = player.color || '#3498db';
                     context.fillRect(-20, -15, 40, 30);
                 }
@@ -129,7 +157,7 @@ export function createCanvasRenderer(canvas) {
 
                 // Namlu (Gun_01_A)
                 context.save();
-                context.rotate(player.turretRotation + (Math.PI / 2));
+                context.rotate(displayTurretRotation + SPRITE_UP_TO_RIGHT_OFFSET);
                 context.beginPath();
                 context.arc(0, 0, 10, 0, Math.PI * 2); // Namlunun döndüğü yere küçük bir gri kapak
                 context.fillStyle = '#7f8c8d'; // Tankın gövde tonuna yakın bir gri
@@ -156,11 +184,17 @@ export function createCanvasRenderer(canvas) {
                 context.fillRect(player.x - 20, player.y - 35, 40 * (player.health / 100), 5);
             });
 
+            playerRenderAngles.forEach((_, playerKey) => {
+                if (!visiblePlayerKeys.has(playerKey)) {
+                    playerRenderAngles.delete(playerKey);
+                }
+            });
+
             // 4. MERMİLERİ ÇİZ
             gameState.bullets.forEach(bullet => {
                 context.save();
                 context.translate(bullet.x, bullet.y);
-                context.rotate(bullet.rotation + (Math.PI / 2));
+                context.rotate(bullet.rotation + SPRITE_UP_TO_RIGHT_OFFSET);
 
                 let bulletImg = getImage(`bullet-${bullet.type}`);
                 if (!bulletImg) bulletImg = getImage('bullet-NORMAL');

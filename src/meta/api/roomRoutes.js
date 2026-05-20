@@ -4,6 +4,10 @@ import { rooms, activeSessions } from '../../data/store.js';
 
 const router = express.Router();
 
+function createGameId() {
+    return 'game_' + Math.random().toString(36).substr(2, 9);
+}
+
 // 1. Yeni oda olustur
 router.post('/', (req, res) => {
     const { roomName, maxPlayers } = req.body;
@@ -23,6 +27,8 @@ router.post('/', (req, res) => {
         host: session.username,
         players: [session.username],
         status: 'waiting',
+        gameId: null,
+        startedAt: null,
         clients: new Set(),
         gameState: null,
         gameInterval: null
@@ -133,7 +139,8 @@ router.get('/:id', (req, res) => {
         host: room.host,
         maxPlayers: room.maxPlayers,
         status: room.status,
-        players: room.players
+        players: room.players,
+        gameId: room.gameId || null
     });
 });
 
@@ -150,8 +157,15 @@ router.post('/:id/start', (req, res) => {
     if (!room) return res.status(404).json({ error: 'Oda yok' });
     if (room.host !== session.username) return res.status(403).json({ error: 'Sadece kurucu baslatabilir' });
 
+    if (room.status === 'playing' && room.gameId) {
+        return res.json({ success: true, roomId: room.id, gameId: room.gameId });
+    }
+
+    room.gameId = createGameId();
+    room.startedAt = Date.now();
     room.status = 'playing';
-    res.json({ success: true });
+
+    res.json({ success: true, roomId: room.id, gameId: room.gameId });
 });
 
 export default router;

@@ -684,6 +684,7 @@ Bu farki karistirmamak onemlidir. SDD yol haritasidir; mevcut kod ise bu yolun c
 - Meta Server ve Game Server arasinda paylasilacak sabitler veya yardimcilar `src/shared/` altina eklenmelidir.
 - Canvas render, HUD, input, local state ve asset loader kodlari `public/js/` altinda ilgili alt klasorlerde tutulmalidir.
 - Asset dosyalari `public/assets/` altinda turlerine gore ayrilmalidir.
+- Dosyalar her zaman UTF-8 encoding ile acilmali ve kaydedilmelidir.
 - RAM store kullanilirken verinin kalici olmadigi unutulmamalidir.
 - `room.players` ve `session.currentRoom` birlikte guncellenmelidir; sadece birini degistirmek lobi/bekleme odasi tutarsizligi yaratir.
 - Lobi/bekleme odasi anlik bildirimleri su anda WebSocket push ile degil polling ile guncellenir.

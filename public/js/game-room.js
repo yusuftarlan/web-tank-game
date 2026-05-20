@@ -13,6 +13,23 @@ if (!token || !roomId) {
 
 document.getElementById('room-id').textContent = roomId;
 
+function showRoomMessage(message) {
+    const messageEl = document.getElementById('room-message');
+    messageEl.textContent = message;
+    messageEl.classList.remove('hidden');
+}
+
+function goToGame(gameId) {
+    if (!gameId) {
+        showRoomMessage('Oyun baslatildi ama oyun kimligi alinamadi.');
+        return;
+    }
+
+    sessionStorage.setItem('roomId', roomId);
+    sessionStorage.setItem('gameId', gameId);
+    window.location.href = `/game.html?roomId=${encodeURIComponent(roomId)}&gameId=${encodeURIComponent(gameId)}`;
+}
+
 // Sunucudan odanın son durumunu çeken fonksiyon
 async function fetchRoomDetails() {
     if (isLeavingRoom) return;
@@ -26,7 +43,7 @@ async function fetchRoomDetails() {
         if (response.ok) {
             // EĞER KURUCU SAVAŞI BAŞLATTIYSA, OTOMATİK OLARAK OYUNA GİR!
             if (data.status === 'playing') {
-                window.location.href = '/game.html';
+                goToGame(data.gameId);
                 return;
             }
 
@@ -75,10 +92,13 @@ document.getElementById('start-game-btn').addEventListener('click', async (e) =>
         const data = await response.json();
         if (data.success) {
             // Başarılıysa savaş ekranına geç (diğer oyuncular da fetchRoomDetails sayesinde otomatik geçecek)
-            window.location.href = '/game.html';
+            goToGame(data.gameId);
+        } else {
+            showRoomMessage(data.error || 'Oyun baslatilamadi.');
         }
     } catch(err) {
         console.error(err);
+        showRoomMessage('Sunucuyla iletisim kurulamadigi icin oyun baslatilamadi.');
     }
 });
 

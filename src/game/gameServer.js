@@ -56,6 +56,7 @@ function changeMap(room) {
         p.y = spawnPos.y;
         p.health = 100;
         p.powerUp = null; // Harita değiştiğinde güçler sıfırlanmalı
+        resetAmmo(p);
     });
 
     // 5. Herkese bilgi gönder
@@ -75,9 +76,33 @@ const FIRE_RATE = 300;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 4;
 const POWERUP_DURATION = 8000;
+const MAX_AMMO = 7;
+const RELOAD_DURATION = 1000;
 
 const ITEM_TYPES = ['HOMING_MISSILE', 'RAPID_FIRE', 'TURBO_DRIVE', 'AOE_EXPLOSION', 'CLUSTER_BOMB', 'BOUNCING_BULLET', 'GHOST_BULLET', 'SHIELD'];
 const ITEM_SPAWN_INTERVAL = 15000;
+
+function ensureAmmoState(player) {
+    if (!Number.isFinite(player.maxAmmo)) player.maxAmmo = MAX_AMMO;
+    if (!Number.isFinite(player.ammo)) player.ammo = player.maxAmmo;
+    if (typeof player.isReloading !== 'boolean') player.isReloading = false;
+    if (!Number.isFinite(player.reloadEndsAt)) player.reloadEndsAt = 0;
+}
+
+function resetAmmo(player) {
+    player.maxAmmo = MAX_AMMO;
+    player.ammo = MAX_AMMO;
+    player.isReloading = false;
+    player.reloadEndsAt = 0;
+}
+
+function startReload(player, now) {
+    ensureAmmoState(player);
+    if (player.isReloading || player.ammo >= player.maxAmmo) return;
+
+    player.isReloading = true;
+    player.reloadEndsAt = now + RELOAD_DURATION;
+}
 
 function startGameLoop(roomId, room) {
     if (room.gameInterval) return;
@@ -127,8 +152,17 @@ function startGameLoop(roomId, room) {
 
         // 2. OYUNCU (TANK) HAREKET VE ATEŞLEME KONTROLLERİ
         Object.values(room.gameState.players).forEach(player => {
+            ensureAmmoState(player);
             if (player.health <= 0) return; 
             if (!player.input) return;
+
+            if (player.isReloading && now >= player.reloadEndsAt) {
+                resetAmmo(player);
+            }
+
+            if (player.input.reloadRequested && player.ammo > 0 && player.ammo < player.maxAmmo) {
+                startReload(player, now);
+            }
 
             // GÜÇ SÜRESİ KONTROLÜ
             if (player.powerUp && now > player.powerUp.expiresAt) {
@@ -194,7 +228,7 @@ function startGameLoop(roomId, room) {
                 currentFireRate = FIRE_RATE * 0.65; 
             }
 
-            if (player.input.isShooting && (now - player.lastShotTime > currentFireRate)) {
+            if (player.input.isShooting && !player.isReloading && player.ammo > 0 && (now - player.lastShotTime > currentFireRate)) {
                 const barrelOffsetX = Math.cos(player.turretRotation) * 40;
                 const barrelOffsetY = Math.sin(player.turretRotation) * 40;
 
@@ -217,6 +251,12 @@ function startGameLoop(roomId, room) {
                 });
                 
                 player.lastShotTime = now;
+                player.ammo -= 1;
+
+                if (player.ammo <= 0) {
+                    player.ammo = 0;
+                    startReload(player, now);
+                }
             }
 
             // ÖZEL GÜÇ TOPLAMA
@@ -363,6 +403,7 @@ function startGameLoop(roomId, room) {
                                                 const rp = room.gameState.players[pName];
                                                 const respawnPos = getSafeSpawnPosition(room);
                                                 rp.health = 100; rp.powerUp = null;
+                                                resetAmmo(rp);
                                                 rp.x = respawnPos.x; rp.y = respawnPos.y;
                                             }
                                         }, 1000);
@@ -409,17 +450,44 @@ export function initGameServer(server) {
     wss.on('connection', (ws, req) => {
         const url = new URL(req.url, `http://${req.headers.host}`);
         const token = url.searchParams.get('token');
+        const requestedRoomId = url.searchParams.get('roomId');
+        const requestedGameId = url.searchParams.get('gameId');
         const clientUsername = url.searchParams.get('username') || 'Misafir'; 
 
         if (!token) { ws.close(); return; }
 
         if (!activeSessions.has(token)) {
+            if (requestedRoomId || requestedGameId) {
+                ws.close();
+                return;
+            }
+
             activeSessions.set(token, { username: clientUsername, currentRoom: 'test-room' });
         }
 
         const session = activeSessions.get(token);
         const username = session.username;
-        let roomId = session.currentRoom; 
+        let roomId = session.currentRoom;
+
+        if (requestedRoomId || requestedGameId) {
+            if (!requestedRoomId || !requestedGameId) {
+                ws.close();
+                return;
+            }
+
+            if (session.currentRoom !== requestedRoomId || !rooms.has(requestedRoomId)) {
+                ws.close();
+                return;
+            }
+
+            const requestedRoom = rooms.get(requestedRoomId);
+            if (requestedRoom.status !== 'playing' || requestedRoom.gameId !== requestedGameId) {
+                ws.close();
+                return;
+            }
+
+            roomId = requestedRoomId;
+        }
 
         if (!roomId || !rooms.has(roomId)) {
             roomId = 'test-room';
@@ -476,7 +544,7 @@ export function initGameServer(server) {
         const spawnPos = getSafeSpawnPosition(room);
 
         room.gameState.players[username] = {
-            id: token, username: username, x: spawnPos.x, y: spawnPos.y, rotation: 0, turretRotation: 0, health: 100, score: 0, powerUp: null, color: colors[colorIndex], lastShotTime: 0, input: { up: false, down: false, left: false, right: false, mouseX: 0, mouseY: 0, isShooting: false }
+            id: token, username: username, x: spawnPos.x, y: spawnPos.y, rotation: 0, turretRotation: 0, health: 100, score: 0, powerUp: null, color: colors[colorIndex], lastShotTime: 0, ammo: MAX_AMMO, maxAmmo: MAX_AMMO, isReloading: false, reloadEndsAt: 0, input: { up: false, down: false, left: false, right: false, mouseX: 0, mouseY: 0, isShooting: false, reloadRequested: false }
         };
 
         startGameLoop(roomId, room);
