@@ -1,104 +1,123 @@
+// src/meta/api/roomRoutes.js
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { activeSessions, rooms } from '../../data/store.js';
+import { rooms, activeSessions } from '../../data/store.js';
 
 const router = express.Router();
 
-router.post('/room/create', (req, res) => {
-    const { token, roomName, maxPlayers } = req.body;
+// 1. YENİ ODA OLUŞTUR
+router.post('/', (req, res) => {
+    const { roomName, maxPlayers } = req.body;
+    const token = req.headers.authorization?.split(' ')[1];
 
     if (!token || !activeSessions.has(token)) {
-        return res.status(401).json({ success: false, message: "Yetkisiz islem. Lutfen once giris yapin." });
+        return res.status(401).json({ error: 'Yetkisiz erişim.' });
     }
 
-    const user = activeSessions.get(token);
-    const roomId = `room_${uuidv4().substring(0, 8)}`;
-    const newRoom = {
-        roomId,
-        roomName: roomName || `${user.username}'in Savasi`,
-        maxPlayers: maxPlayers || 4,
-        players: [user.username],
-        gameMaster: user.username,
-        status: "waiting",
-        createdAt: Date.now()
-    };
+    const session = activeSessions.get(token);
+    const roomId = 'room_' + Math.random().toString(36).substr(2, 9);
 
-    rooms.set(roomId, newRoom);
-    user.currentRoom = roomId;
-
-    res.status(200).json({
-        success: true,
-        message: "Oda basariyla olusturuldu.",
-        roomId,
-        room: newRoom
+    rooms.set(roomId, {
+        id: roomId,
+        name: roomName || 'İsimsiz Cephe',
+        maxPlayers: parseInt(maxPlayers) || 4,
+        host: session.username,
+        status: 'waiting', // YENİ: Oyunun durumunu tutuyoruz
+        clients: new Set(),
+        gameState: null,
+        gameInterval: null
     });
+
+    session.currentRoom = roomId;
+    res.json({ success: true, roomId: roomId });
 });
 
-router.get('/rooms', (req, res) => {
-    const availableRooms = [];
+// 2. AKTİF ODALARI LİSTELE
+router.get('/', (req, res) => {
+    const roomList = [];
+    
+    rooms.forEach((room, roomId) => {
+        if (roomId === 'test-room') return;
+        // YENİ: Sadece "bekleyen" (savaş başlamamış) odaları listede göster
+        if (room.status !== 'waiting') return;
 
-    for (const room of rooms.values()) {
-        if (room.status === "waiting") {
-            availableRooms.push({
-                roomId: room.roomId,
-                roomName: room.roomName,
-                currentPlayers: room.players.length,
-                maxPlayers: room.maxPlayers,
-                gameMaster: room.gameMaster
-            });
-        }
-    }
-
-    res.status(200).json({ success: true, activeRooms: availableRooms });
-});
-
-router.post('/room/leave', (req, res) => {
-    const { token, roomId } = req.body;
-
-    if (!token || !activeSessions.has(token)) {
-        return res.status(401).json({ success: false, message: "Yetkisiz islem. Lutfen once giris yapin." });
-    }
-
-    const room = rooms.get(roomId);
-
-    if (!room) {
-        return res.status(404).json({ success: false, message: "Oda bulunamadi." });
-    }
-
-    const user = activeSessions.get(token);
-    room.players = room.players.filter((player) => player !== user.username);
-    user.currentRoom = null;
-
-    if (room.players.length === 0) {
-        rooms.delete(roomId);
-        return res.status(200).json({
-            success: true,
-            message: "Oda kapatildi.",
-            roomClosed: true
+        let currentPlayers = 0;
+        activeSessions.forEach(session => {
+            if (session.currentRoom === roomId) currentPlayers++;
         });
-    }
+        
+        roomList.push({
+            id: roomId,
+            name: room.name,
+            host: room.host,
+            currentPlayers: currentPlayers,
+            maxPlayers: room.maxPlayers
+        });
+    });
 
-    if (room.gameMaster === user.username) {
-        room.gameMaster = room.players[0];
-    }
+    res.json({ rooms: roomList });
+});
 
-    res.status(200).json({
-        success: true,
-        message: "Odadan cikildi.",
-        roomClosed: false,
-        room
+// 3. ODAYA KATIL
+router.post('/:id/join', (req, res) => {
+    const roomId = req.params.id;
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token || !activeSessions.has(token)) return res.status(401).json({ error: 'Yetkisiz.' });
+    if (!rooms.has(roomId)) return res.status(404).json({ error: 'Oda bulunamadı.' });
+
+    const room = rooms.get(roomId);
+    if (room.status !== 'waiting') return res.status(400).json({ error: 'Savaş çoktan başlamış!' });
+
+    let currentPlayers = 0;
+    activeSessions.forEach(s => { if (s.currentRoom === roomId) currentPlayers++; });
+
+    if (currentPlayers >= room.maxPlayers) return res.status(400).json({ error: 'Oda tam kapasite dolu!' });
+
+    const session = activeSessions.get(token);
+    session.currentRoom = roomId;
+
+    res.json({ success: true, roomId: roomId });
+});
+
+// 4. BEKLEME ODASI BİLGİLERİNİ GETİR (YENİ EKLENDİ)
+router.get('/:id', (req, res) => {
+    const roomId = req.params.id;
+    
+    if (!rooms.has(roomId)) return res.status(404).json({ error: 'Oda bulunamadı.' });
+
+    const room = rooms.get(roomId);
+    const players = [];
+    
+    // Odaya katılmış oyuncuları bul
+    activeSessions.forEach(session => {
+        if (session.currentRoom === roomId) players.push(session.username);
+    });
+
+    res.json({
+        id: room.id,
+        name: room.name,
+        host: room.host,
+        maxPlayers: room.maxPlayers,
+        status: room.status,
+        players: players
     });
 });
 
-router.get('/room/:roomId', (req, res) => {
-    const { roomId } = req.params;
+// 5. OYUNU BAŞLAT (YENİ EKLENDİ)
+router.post('/:id/start', (req, res) => {
+    const roomId = req.params.id;
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token || !activeSessions.has(token)) return res.status(401).json({error: 'Yetkisiz'});
+    
+    const session = activeSessions.get(token);
     const room = rooms.get(roomId);
+    
+    if (!room) return res.status(404).json({error: 'Oda yok'});
+    if (room.host !== session.username) return res.status(403).json({error: 'Sadece kurucu başlatabilir'});
 
-    if (!room) {
-        return res.status(404).json({ success: false, message: "Oda bulunamadi." });
-    }
-
-    res.status(200).json({ success: true, room });
+    room.status = 'playing'; // Odanın durumunu savaşa çevir
+    res.json({success: true});
 });
 
 export default router;

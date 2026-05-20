@@ -1,38 +1,43 @@
+// src/meta/api/authRoutes.js
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { activeSessions, activeUsernames } from '../../data/store.js';
 
 const router = express.Router();
 
+// Giriş yapma (Login) POST isteği
 router.post('/login', (req, res) => {
-    const { username } = req.body;
+    try {
+        const { username } = req.body;
 
-    if (!username || username.trim() === '') {
-        return res.status(400).json({ success: false, message: "Kullanici adi bos olamaz." });
+        if (!username || username.trim() === '') {
+            return res.status(400).json({ success: false, message: 'Komutan adı boş olamaz!' });
+        }
+
+        const cleanUsername = username.trim();
+
+        // Aynı isimle giriş yapılmasını engelle
+        if (activeUsernames.has(cleanUsername)) {
+            return res.status(400).json({ success: false, message: 'Bu isimde bir komutan şu an zaten oyunda!' });
+        }
+
+        // Yeni oyuncu için benzersiz bir oturum anahtarı (token) oluştur
+        const token = 'cmd_' + Math.random().toString(36).substr(2, 10);
+
+        // Kullanıcıyı aktif listelere ekle
+        activeUsernames.add(cleanUsername);
+        activeSessions.set(token, {
+            username: cleanUsername,
+            currentRoom: null
+        });
+
+        console.log(`[SİSTEM] Komutan ${cleanUsername} karargâha giriş yaptı.`);
+
+        // Başarılı yanıt dön
+        res.json({ success: true, token: token, username: cleanUsername });
+    } catch (error) {
+        console.error('[HATA] Giriş işlemi sırasında sunucu hatası:', error);
+        res.status(500).json({ success: false, message: 'Sunucu tarafında bir hata oluştu.' });
     }
-
-    const cleanUsername = username.trim();
-
-    if (activeUsernames.has(cleanUsername)) {
-        return res.status(409).json({ success: false, message: "Bu kullanici adi su an oyunda!" });
-    }
-
-    const token = uuidv4();
-
-    activeUsernames.add(cleanUsername);
-    activeSessions.set(token, {
-        username: cleanUsername,
-        joinedAt: Date.now(),
-        currentRoom: null
-    });
-
-    res.status(200).json({
-        success: true,
-        message: "Giris basarili.",
-        token,
-        username: cleanUsername,
-        redirectTo: "/main-menu"
-    });
 });
 
 export default router;
