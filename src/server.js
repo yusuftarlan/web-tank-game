@@ -1,28 +1,29 @@
+// src/server.js
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import apiRouter from './meta/api/index.js';
-import pageRouter from './meta/pages/pageRoutes.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const publicDir = path.resolve(__dirname, '../public');
+import { createServer } from 'http'; // HTTP sunucusunu manuel oluşturmak için eklendi
+import apiRoutes from './meta/api/index.js';
+import pageRoutes from './meta/pages/pageRoutes.js';
+import { initGameServer } from './game/gameServer.js'; // Game Server başlatıcısı
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
+
+// HTTP Sunucusunu Express ile sarmalıyoruz (WebSocket'i aynı porta takabilmek için)
+const server = createServer(app);
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(publicDir));
+app.use(express.static('public'));
 
-app.use('/api', apiRouter);
-app.use(pageRouter);
+// API ve Sayfa Router'ları
+app.use('/api', apiRoutes);
+app.use('/', pageRoutes);
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-    app.listen(PORT, () => {
-        console.log(`Server running at http://localhost:${PORT}`);
-    });
-}
+// WebSocket (Game) sunucusunu başlat ve HTTP sunucusuna bağla
+initGameServer(server);
 
-export default app;
+// app.listen YERİNE server.listen kullanıyoruz!
+server.listen(port, () => {
+    console.log(`\n[SİSTEM] HTTP ve WebSocket Sunucusu http://localhost:${port} adresinde başarıyla çalışıyor.`);
+});

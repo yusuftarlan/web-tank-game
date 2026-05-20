@@ -1,47 +1,40 @@
-const newGameForm = document.getElementById('new-game-form');
-const roomNameInput = document.getElementById('room-name');
-const maxPlayersInput = document.getElementById('max-players');
-const newGameMessage = document.getElementById('new-game-message');
-const backButton = document.getElementById('back-button');
+// public/js/new-game.js
 
-const token = sessionStorage.getItem('token');
-const username = sessionStorage.getItem('username');
+document.getElementById('create-room-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const roomName = document.getElementById('roomName').value;
+    const maxPlayers = document.getElementById('maxPlayers').value;
+    const token = sessionStorage.getItem('token');
+    const errorMessage = document.getElementById('error-message');
 
-if (!token || !username) {
-    window.location.href = '/';
-}
-
-backButton.addEventListener('click', () => {
-    window.location.href = '/main-menu';
-});
-
-newGameForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const roomName = roomNameInput.value.trim();
-    const maxPlayers = Number(maxPlayersInput.value);
+    if (!token) {
+        window.location.href = '/';
+        return;
+    }
 
     try {
-        const response = await fetch('/api/room/create', {
+        const response = await fetch('/api/rooms', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                token,
-                roomName,
-                maxPlayers
-            })
+            body: JSON.stringify({ roomName, maxPlayers })
         });
+        
         const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            newGameMessage.textContent = data.message || 'Oda olusturulamadi.';
-            return;
+        
+        if (data.success) {
+            // Oda başarıyla oluşturuldu, bekleme odasına yönlendir
+            window.location.href = `/game-room.html?roomId=${data.roomId}`;
+        } else {
+            errorMessage.textContent = data.error || 'Oda oluşturulamadı.';
+            errorMessage.classList.remove('hidden');
         }
-
-        window.location.href = `/game-room/${data.roomId}`;
-    } catch (error) {
-        newGameMessage.textContent = 'Sunucuya baglanilamadi.';
+    } catch (err) {
+        console.error(err);
+        errorMessage.textContent = 'Sunucuyla iletişim kurulamadı.';
+        errorMessage.classList.remove('hidden');
     }
 });

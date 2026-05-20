@@ -13,15 +13,16 @@ const assets = {
  * @returns {Promise} Görsel yüklendiğinde çözülen (resolve) promise.
  */
 function loadImage(name, src) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
             assets.images[name] = img; // Yüklenen görseli depoya ekle
             resolve(img);
         };
         img.onerror = () => {
-            console.error(`Görsel yüklenemedi: ${src}`);
-            reject(new Error(`Görsel yükleme hatası: ${src}`));
+            // YENİ: Reject (çökme) yerine konsola uyarı basıp devam ediyoruz
+            console.warn(`[UYARI] Görsel bulunamadı: ${src}. Sistem yedek şekilleri kullanacak.`);
+            resolve(null); 
         };
         img.src = src;
     });
@@ -34,27 +35,21 @@ function loadImage(name, src) {
 export async function loadGameAssets() {
     console.log('Oyun varlıkları yükleniyor...');
 
-    // Yüklenmesini istediğimiz tüm görsellerin listesi
-    // İleride kendi png/jpg dosyalarını oluşturduğunda başındaki // işaretlerini kaldırabilirsin.
     const imagePromises = [
-        // Gerçek tank görselini 'tankBody' adıyla yüklüyoruz.
-        // DİKKAT: 'public/assets/sprites/tank-blue.png' dosyasının var olduğundan emin ol!
         loadImage('tankBody', '/assets/sprites/tank-blue.png')
     ];
 
     try {
-        // Promise.all, dizideki TÜM yükleme işlemleri bitene kadar bekler
         await Promise.all(imagePromises);
-        console.log('Tüm varlıklar başarıyla yüklendi!');
+        console.log('Varlık yükleme işlemi tamamlandı!');
     } catch (error) {
-        console.error('Oyun başlatılırken kritik bir varlık yüklenemedi!', error);
-        throw error; // Hatayı fırlatıyoruz ki oyun hatalı durumda başlamasın
+        // Artık buraya düşmeyecek çünkü loadImage hata fırlatmıyor
+        console.error('Kritik varlık hatası!', error);
     }
 }
 
 /**
  * Renderer (Çizim Motoru) tarafından yüklü görselleri almak için kullanılır.
- * Örnek kullanım: const tankImg = getImage('tankBlue');
  * @param {string} name - Alınmak istenen görselin ismi
  * @returns {HTMLImageElement} Yüklü görsel nesnesi
  */

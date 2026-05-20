@@ -1,7 +1,10 @@
+// src/data/store.js
+
+// Aktif oyuncu oturumlarını (token -> kullanıcı bilgileri) tutar
 export const activeSessions = new Map();
 
-// Hizli benzersizlik (unique) kontrolu icin sadece isimleri tutar.
+// Aktif kullanıcı adlarını (aynı isimle birden fazla girişi önlemek için) tutar
 export const activeUsernames = new Set();
 
-// Oda bilgileri RAM uzerinde tutulur.
+// Aktif oyun odalarını (roomId -> oda detayları ve game state) tutar
 export const rooms = new Map();

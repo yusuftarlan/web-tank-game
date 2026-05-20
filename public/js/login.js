@@ -1,40 +1,51 @@
-const loginForm = document.getElementById('login-form');
-const usernameInput = document.getElementById('username');
-const loginMessage = document.getElementById('login-message');
+// public/js/login.js
 
-function showMessage(message) {
-    loginMessage.textContent = message;
-}
-
-loginForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const username = usernameInput.value.trim();
-
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault(); // Sayfanın yenilenmesini engelle
+    
+    const username = document.getElementById('username').value.trim();
+    const messageEl = document.getElementById('login-message');
+    
     if (!username) {
-        showMessage('Kullanici adi bos olamaz.');
+        messageEl.textContent = 'Lütfen bir komutan adı girin.';
+        messageEl.className = 'mt-4 text-sm text-red-400 min-h-[20px] font-medium relative z-10';
         return;
     }
 
     try {
-        const response = await fetch('/api/login', {
+        // Yükleniyor durumu
+        messageEl.textContent = 'Sinyal gönderiliyor...';
+        messageEl.className = 'mt-4 text-sm text-emerald-400 min-h-[20px] font-medium relative z-10';
+
+        // Sunucuya POST isteği at
+        const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ username })
+            body: JSON.stringify({ username: username })
         });
+
         const data = await response.json();
 
-        if (!response.ok) {
-            showMessage(data.message || 'Giris yapilamadi.');
-            return;
+        if (data.success) {
+            // Giriş başarılıysa bilgileri tarayıcıya kaydet
+            sessionStorage.setItem('token', data.token);
+            sessionStorage.setItem('username', data.username);
+            
+            // Başarılı mesajı ve yönlendirme
+            messageEl.textContent = 'Bağlantı kuruldu! Karargâha aktarılıyorsunuz...';
+            setTimeout(() => {
+                window.location.href = '/main-menu';
+            }, 500); // 0.5 saniye bekle ve Lobiye geç
+        } else {
+            // Sunucudan hata geldiyse (örn: isim kullanılıyorsa)
+            messageEl.textContent = data.message || 'Giriş reddedildi.';
+            messageEl.className = 'mt-4 text-sm text-red-400 min-h-[20px] font-medium relative z-10';
         }
-
-        sessionStorage.setItem('username', data.username);
-        sessionStorage.setItem('token', data.token);
-        window.location.href = data.redirectTo;
     } catch (error) {
-        showMessage('Sunucuya baglanilamadi.');
+        console.error('Bağlantı hatası:', error);
+        messageEl.textContent = 'Sunucuya bağlanılamadı. Sunucunun açık olduğundan emin olun.';
+        messageEl.className = 'mt-4 text-sm text-red-400 min-h-[20px] font-medium relative z-10';
     }
 });
