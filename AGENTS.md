@@ -6,24 +6,27 @@ Bu dosya, projeyi devralacak gelistirici veya ajanlar icin guncel teknik durumu 
 
 Web Tank Game'in nihai hedefi, tarayici uzerinden oynanabilen, gercek zamanli ve cok oyunculu bir 2D tank savasi oyunu gelistirmektir. Tasarim dokumani `Documents/SDD.pdf` icinde Meta Server, Game Server, HTML5 Canvas frontend, WebSocket ile anlik oyun akisi ve RAM tabanli gecici oturum mimarisini tarif eder.
 
-Mevcut kod bu hedefin erken asamasindadir. Su anda calisan bolumler:
+Mevcut kod bu hedefin erken asamasindadir. Su anda calisan ana bolumler:
 
 - Express tabanli HTTP server.
+- HTTP server'a bagli WebSocket Game Server iskeleti.
 - JSON donen Meta Server API route'lari.
 - HTML sayfalari sunan page route'lari.
 - RAM tabanli gecici kullanici ve oda store'u.
-- Login, main menu, yeni oda olusturma ve game room bekleme akisi.
-- Oda olusturma, oda listeleme, oda detay ve odadan cikma API'leri.
-- Game Server, mekanik, frontend render ve asset ekipleri icin dosya iskeleti.
+- Login, main menu, yeni oda olusturma, odaya katilma ve game room bekleme akisi.
+- Oda olusturma, oda listeleme, oda detay, odaya katilma, odadan cikma ve oyunu baslatma API'leri.
+- Odadan cikinca oyuncu listesinden dusme, oda bosalinca silinme ve kurucu cikarsa `host` devri.
+- Bekleme odasinda 2 saniyelik polling ile oyuncu listesi ve kurucu bilgisinin guncellenmesi.
+- Canvas oyun ekrani, WebSocket client, input manager, renderer, HUD, asset loader ve map/game server dosyalari.
 
-Henuz uygulanmayan ana bolumler:
+Henuz tamamlanmamis veya erken asamada olan ana bolumler:
 
-- WebSocket tabanli Game Server baglantisi.
-- Gercek authoritative oyun dongusu.
-- Tam tank hareketi ve mermi fizigi.
-- Gercek carpismalar, skor, health, power-up ve respawn sistemleri.
-- Tam Canvas render sistemi ve oynanabilir oyun ekrani.
-- Odaya katilma ve oyunu baslatma akislarinin tamamlanmis halleri.
+- Production kalitesinde authoritative oyun dongusu.
+- Tam ve dengelenmis tank hareketi, mermi fizigi ve collision entegrasyonu.
+- Tam skor, health, power-up, respawn ve oyun sonu sistemleri.
+- Client-side prediction, reconciliation ve interpolation.
+- Tamamlanmis Canvas render deneyimi ve oyun polish'i.
+- Logout/disconnect temizleme ve RAM store TTL mekanizmalari.
 
 ## Calisma ve Giris Noktasi
 
@@ -56,11 +59,13 @@ http://localhost:3000
 `src/server.js` su islemleri yapar:
 
 - Express uygulamasini olusturur.
+- Express uygulamasini `http.createServer(app)` ile HTTP server icine alir.
 - CORS middleware'ini ekler.
 - JSON body parsing icin `express.json()` kullanir.
 - `public/` klasorunu statik dosya klasoru olarak sunar.
 - API router'ini `/api` prefix'i ile baglar.
 - Page router'i prefix olmadan baglar.
+- `initGameServer(server)` ile WebSocket Game Server'i ayni HTTP server'a baglar.
 
 ## Aktif Klasor Yapisi
 
@@ -79,6 +84,7 @@ src/
   game/
     gameServer.js
     gameLoop.js
+    maps.js
     entities/
       tank.js
       bullet.js
@@ -104,6 +110,8 @@ public/
     new-game.js
     game-room.js
     game-client.js
+    input/
+      inputManager.js
     render/
       canvasRenderer.js
       hudRenderer.js
@@ -115,9 +123,9 @@ public/
     game.css
   assets/
     sprites/
+    effects/
     audio/
     maps/
-    effects/
     ui/
 Documents/
   SDD.pdf
@@ -153,7 +161,18 @@ Aktif API prefix'i:
 /api
 ```
 
-### POST /api/login
+`src/meta/api/index.js` su alt router'lari baglar:
+
+- `/api/auth` -> `src/meta/api/authRoutes.js`
+- `/api/rooms` -> `src/meta/api/roomRoutes.js`
+
+API'lerde oturum token'i body icinden degil, genellikle su header ile gonderilir:
+
+```http
+Authorization: Bearer <token>
+```
+
+### POST /api/auth/login
 
 Dosya:
 
@@ -174,21 +193,20 @@ Basarili yanit:
 ```json
 {
   "success": true,
-  "message": "Giris basarili.",
-  "token": "uuid-token",
-  "username": "Yusuf",
-  "redirectTo": "/main-menu"
+  "token": "cmd_xxxxx",
+  "username": "Yusuf"
 }
 ```
 
 Hata durumlari:
 
 - Bos username: `400`
-- Aktif kullanici adi tekrar kullanilirsa: `409`
+- Aktif kullanici adi tekrar kullanilirsa: `400`
+- Beklenmeyen server hatasi: `500`
 
-Token su anda JWT degildir; UUID tabanli gecici oturum biletidir.
+Token su anda JWT degildir; `cmd_` prefix'li gecici oturum biletidir. Kullanici bilgisi RAM'deki `activeSessions` Map'i icinde tutulur.
 
-### POST /api/room/create
+### POST /api/rooms
 
 Dosya:
 
@@ -196,17 +214,35 @@ Dosya:
 src/meta/api/roomRoutes.js
 ```
 
+Beklenen header:
+
+```http
+Authorization: Bearer <token>
+```
+
 Beklenen body:
 
 ```json
 {
-  "token": "uuid-token",
   "roomName": "Oda Adi",
   "maxPlayers": 4
 }
 ```
 
-Token RAM store icinde bulunmazsa `401` doner. Basarili olursa yeni oda `rooms` Map'i icine eklenir, olusturan kullanici odanin `gameMaster` degeri olur ve kullanicinin session bilgisinde `currentRoom` oda id'sine set edilir.
+Token RAM store icinde bulunmazsa `401` doner. Basarili olursa yeni oda `rooms` Map'i icine eklenir. Odayi olusturan kullanici:
+
+- `host` olur.
+- `players` listesinin ilk oyuncusu olur.
+- Kendi session bilgisinde `currentRoom` alanina oda id'si yazilir.
+
+Basarili yanit:
+
+```json
+{
+  "success": true,
+  "roomId": "room_abc123"
+}
+```
 
 ### GET /api/rooms
 
@@ -216,9 +252,103 @@ Dosya:
 src/meta/api/roomRoutes.js
 ```
 
-`waiting` durumundaki odalari JSON olarak listeler.
+`waiting` durumundaki odalari JSON olarak listeler. `test-room` listede gosterilmez.
 
-### GET /api/room/:roomId
+Basarili yanit sekli:
+
+```json
+{
+  "rooms": [
+    {
+      "id": "room_abc123",
+      "name": "Oda Adi",
+      "host": "Yusuf",
+      "currentPlayers": 1,
+      "maxPlayers": 4
+    }
+  ]
+}
+```
+
+`currentPlayers`, artik session taranarak degil, odanin resmi `players.length` degeriyle hesaplanir.
+
+### POST /api/rooms/:id/join
+
+Dosya:
+
+```text
+src/meta/api/roomRoutes.js
+```
+
+Beklenen header:
+
+```http
+Authorization: Bearer <token>
+```
+
+Davranis:
+
+- Token gecersizse `401` doner.
+- Oda yoksa `404` doner.
+- Oda `waiting` degilse `400` doner.
+- Oda doluysa `400` doner.
+- Oyuncu zaten odadaysa ikinci kez eklenmez.
+- Oyuncu `room.players` listesine eklenir.
+- Oyuncunun `session.currentRoom` alani oda id'sine set edilir.
+
+Basarili yanit:
+
+```json
+{
+  "success": true,
+  "roomId": "room_abc123"
+}
+```
+
+### POST /api/rooms/:id/leave
+
+Dosya:
+
+```text
+src/meta/api/roomRoutes.js
+```
+
+Beklenen header:
+
+```http
+Authorization: Bearer <token>
+```
+
+Davranis:
+
+- Token gecersizse `401` doner.
+- Oda yoksa ve oyuncunun session'i bu odayi gosteriyorsa `currentRoom` temizlenir.
+- Oyuncu `room.players` listesinden cikarilir.
+- Oyuncunun `session.currentRoom` alani `null` yapilir.
+- Oda bos kalirsa `rooms.delete(roomId)` ile RAM'den silinir.
+- Cikan oyuncu `host` ise ve odada oyuncu kaldiysa `host` kalan ilk oyuncuya devredilir.
+
+Oda silinirse yanit:
+
+```json
+{
+  "success": true,
+  "roomDeleted": true
+}
+```
+
+Oda devam ederse yanit:
+
+```json
+{
+  "success": true,
+  "roomDeleted": false,
+  "host": "YeniHost",
+  "players": ["YeniHost"]
+}
+```
+
+### GET /api/rooms/:id
 
 Dosya:
 
@@ -228,7 +358,22 @@ src/meta/api/roomRoutes.js
 
 Tek bir odanin detayini JSON olarak doner. Oda bulunamazsa `404` doner.
 
-### POST /api/room/leave
+Basarili yanit:
+
+```json
+{
+  "id": "room_abc123",
+  "name": "Oda Adi",
+  "host": "Yusuf",
+  "maxPlayers": 4,
+  "status": "waiting",
+  "players": ["Yusuf"]
+}
+```
+
+Bekleme odasi frontend'i bu endpoint'i 2 saniyede bir cagirarak oyuncu listesini ve kurucu bilgisini gunceller.
+
+### POST /api/rooms/:id/start
 
 Dosya:
 
@@ -236,16 +381,26 @@ Dosya:
 src/meta/api/roomRoutes.js
 ```
 
-Beklenen body:
+Beklenen header:
+
+```http
+Authorization: Bearer <token>
+```
+
+Davranis:
+
+- Token gecersizse `401` doner.
+- Oda yoksa `404` doner.
+- Sadece odanin `host` kullanicisi oyunu baslatabilir; aksi halde `403` doner.
+- Basarili olursa `room.status = "playing"` yapilir.
+
+Basarili yanit:
 
 ```json
 {
-  "token": "uuid-token",
-  "roomId": "room_12345678"
+  "success": true
 }
 ```
-
-Oyuncuyu odanin `players` listesinden cikarir ve session icindeki `currentRoom` degerini `null` yapar. Cikan oyuncu `gameMaster` ise ve odada oyuncu kaldiysa `gameMaster` kalan ilk oyuncuya devredilir. Oda bos kalirsa `rooms.delete(roomId)` ile RAM'den silinir.
 
 ## Page ve Statik Route'lar
 
@@ -264,11 +419,18 @@ Aktif page route'lari:
 Express `public/` klasorunu statik sundugu icin su HTML dosyalari da dogrudan acilir:
 
 - `GET /new-game.html`
+- `GET /game-room.html?roomId=<roomId>`
 - `GET /game.html`
+
+Mevcut frontend akisi bekleme odasina query string ile gider:
+
+```text
+/game-room.html?roomId=room_abc123
+```
 
 ## Frontend Durumu
 
-Frontend su anda lobi ve bekleme odasi akislarini destekler. Gercek oynanabilir Canvas oyunu henuz yoktur.
+Frontend su anda lobi, bekleme odasi ve WebSocket'e baglanan oyun ekrani akisini destekler. Oyun ekrani oynanabilirlik acisindan gelismis parcalar icerse de proje hala erken asamadadir.
 
 ### public/index.html ve public/js/login.js
 
@@ -278,51 +440,95 @@ Akis:
 
 1. Kullanici adini input'tan okur.
 2. Bos username icin frontend tarafinda mesaj gosterir.
-3. `POST /api/login` istegi atar.
+3. `POST /api/auth/login` istegi atar.
 4. Backend basarili donerse `username` ve `token` degerlerini `sessionStorage` icine yazar.
-5. `redirectTo` degeri ile `/main-menu` sayfasina gecer.
+5. Kisa bekleme sonrasi `/main-menu` sayfasina gecer.
 6. Backend hata donerse mesaji ekranda gosterir.
 
 ### public/main-menu.html ve public/js/main-menu.js
 
 Ana menu/lobi ekranidir.
 
-- `sessionStorage` icinden `username` okur.
-- Username yoksa login sayfasina geri yollar.
+- `sessionStorage` icinden `token` ve `username` okur.
+- Token yoksa login sayfasina geri yollar.
 - Kullanici adini ekranda gosterir.
 - `GET /api/rooms` ile bekleyen odalari listeler.
-- Her oda icin simdilik pasif bir "Katil" butonu gosterir.
+- Her oda icin doluluk sayaci ve "KATIL" butonu gosterir.
+- Oda doluysa buton disabled olur ve "DOLU" yazar.
+- "KATIL" butonu `POST /api/rooms/:id/join` istegi atar.
+- Katilma basarili olursa `/game-room.html?roomId=<roomId>` adresine gider.
 - "Yeni Oyun Olustur" butonu `/new-game.html` adresine gider.
+- Logout butonu sadece `sessionStorage` temizler; server tarafinda aktif kullanici temizligi henuz yoktur.
 
 ### public/new-game.html ve public/js/new-game.js
 
 Yeni oda olusturma formudur.
 
 - Oyun adi ve maksimum oyuncu sayisi alir.
-- `sessionStorage` icinden `token` ve `username` kontrol eder.
-- `POST /api/room/create` istegi atar.
-- Basarili olursa `/game-room/:roomId` bekleme odasina yonlendirir.
-- "Geri Don" butonu `/main-menu` adresine gider.
+- `sessionStorage` icinden `token` kontrol eder.
+- `POST /api/rooms` istegi atar.
+- Basarili olursa `/game-room.html?roomId=<roomId>` bekleme odasina yonlendirir.
+- "Iptal Et" butonu `/main-menu` adresine gider.
 
 ### public/game-room.html ve public/js/game-room.js
 
 Oda bekleme ekranidir.
 
-- URL path icinden `roomId` okur.
-- `GET /api/room/:roomId` ile oda bilgisini ceker.
-- Oda adi, oda id'si, game master ve oyuncu sayisini gosterir.
-- "Cik" butonu `POST /api/room/leave` istegi atar ve basarili olursa `/main-menu` adresine doner.
-- "Oyunu Baslat" butonu simdilik gorunur ama fonksiyonel degildir.
+- URL query string icinden `roomId` okur.
+- Token veya room id yoksa `/main-menu` adresine doner.
+- `GET /api/rooms/:id` ile oda bilgisini ceker.
+- Oda adi, oda id'si, oyuncu sayisi, maksimum oyuncu sayisi ve oyuncu listesini gosterir.
+- `players` listesindeki `host` kullanicisini "Kurucu" etiketiyle gosterir.
+- Bekleme odasi 2 saniyede bir polling yapar:
+
+```js
+setInterval(fetchRoomDetails, 2000);
+```
+
+- Bu polling sayesinde bir oyuncu odadan cikinca veya kurucu degisince odada kalanlarin ekrani en gec yaklasik 2 saniye icinde guncellenir.
+- "MERKEZE DON" butonu once `POST /api/rooms/:id/leave` istegi atar, sonra `/main-menu` adresine doner.
+- Cikis sirasinda tekrar tekrar tiklamayi azaltmak icin `isLeavingRoom` flag'i kullanilir.
+- "SAVASI BASLAT" butonu sadece `currentUsername === data.host` ise gorunur.
+- Oyun baslatilinca oda `playing` durumuna gecer; bekleme odasindaki client'lar polling ile bunu gorup `/game.html` adresine gecer.
 
 ### public/game.html ve public/js/game-client.js
 
-Canvas tabanli oyun ekrani icin placeholder iskelettir.
+Canvas tabanli oyun ekranidir.
 
 - `#game-canvas` canvas elementi vardir.
-- `public/js/render/canvasRenderer.js` basit canvas renderer iskeletidir.
-- `public/js/render/hudRenderer.js` HUD renderer iskeletidir.
-- `public/js/state/gameState.js` local game state iskeletidir.
-- `public/js/assets/assetLoader.js` asset preload iskeletidir.
+- Canvas boyutu su anda `1920x1080` olarak set edilir.
+- `public/js/input/inputManager.js` input toplar.
+- `public/js/game-client.js`, `sessionStorage` icindeki token ile WebSocket'e baglanir.
+- Client `PLAYER_INPUT` mesajlarini WebSocket uzerinden server'a gonderir.
+- Server'dan `GAME_STATE_UPDATE`, `EXPLOSION` ve `MAP_CHANGED` mesajlarini dinler.
+- `public/js/render/canvasRenderer.js` oyun state'ini canvas'a cizer.
+- `public/js/render/hudRenderer.js` HUD bilgisini cizer.
+- `public/js/state/gameState.js` local game state iskeletini olusturur.
+- `public/js/assets/assetLoader.js` sprite ve efekt assetlerini yukler.
+
+## Game Server Durumu
+
+Dosya:
+
+```text
+src/game/gameServer.js
+```
+
+`initGameServer(server)`, `ws` paketiyle WebSocket server kurar ve HTTP server'a baglanir.
+
+Mevcut Game Server tarafinda su parcalar vardir:
+
+- WebSocket baglantisi token ve username ile kabul edilir.
+- Oyuncunun `session.currentRoom` degeri kullanilarak oda bulunur.
+- Test veya fallback akislar icin `test-room` kullanimi bulunur.
+- Oda icinde `clients` Set'i ile WebSocket client'lari tutulur.
+- `gameState.players`, `bullets`, `activeItems`, `obstacles`, `world` gibi alanlar uzerinden state tutulur.
+- 60 FPS hedefli oyun dongusu `setInterval` ile calistirilir.
+- Oyuncu input'u `PLAYER_INPUT` mesaji ile islenir.
+- Tank hareketi, mermi uretimi, power-up, item spawn, collision ve explosion mesajlari icin erken asama uygulamalar vardir.
+- `src/game/maps.js` icindeki harita verileri kullanilir.
+
+Bu kod oyun hedefinin onemli bir iskeletidir; ancak hala production kalitesinde authoritative server, denge, anti-cheat, reconnect, cleanup ve tam test kapsamindan uzaktir.
 
 ## Veri Modeli ve RAM Store
 
@@ -343,7 +549,6 @@ Login sonrasi session sekli:
 ```js
 {
   username: "Yusuf",
-  joinedAt: 1714300000000,
   currentRoom: null
 }
 ```
@@ -352,17 +557,26 @@ Oda sekli:
 
 ```js
 {
-  roomId: "room_12345678",
-  roomName: "Oda Adi",
+  id: "room_abc123",
+  name: "Oda Adi",
   maxPlayers: 4,
+  host: "Yusuf",
   players: ["Yusuf"],
-  gameMaster: "Yusuf",
   status: "waiting",
-  createdAt: 1714300000000
+  clients: new Set(),
+  gameState: null,
+  gameInterval: null
 }
 ```
 
 Bu veriler RAM uzerindedir. Server yeniden baslatilinca tum kullanicilar, token'lar ve odalar silinir. Bu davranis su an icin bilincli ve SDD'deki gecici oturum yaklasimina uygundur.
+
+Oda modeli icin dikkat edilmesi gereken zihinsel ayrim:
+
+- `room.players`: Odanin resmi oyuncu listesi.
+- `session.currentRoom`: Oyuncunun hangi odada oldugunu gosteren oturum referansi.
+
+Bu iki alan join/leave/create akislari sirasinda senkron tutulmalidir.
 
 ## Ekip Gorev Ayrimi
 
@@ -372,6 +586,7 @@ Calisma alani:
 
 ```text
 src/meta/
+src/data/store.js
 public/index.html
 public/main-menu.html
 public/new-game.html
@@ -387,8 +602,11 @@ Sorumluluklar:
 - Login.
 - Oda listeleme.
 - Oda olusturma.
+- Odaya katilma.
 - Oda bekleme ekrani.
-- Odadan cikma ve game master devri.
+- Odadan cikma, oda silme ve `host` devri.
+- Oyunu baslatma status degisimi.
+- Lobi/bekleme odasi polling davranisi.
 
 ### Fizik ve mekanik ekibi
 
@@ -402,11 +620,12 @@ src/shared/
 Sorumluluklar:
 
 - Authoritative Game Server iskeleti.
+- WebSocket baglanti ve oda-client iliskisi.
 - Oyun dongusu.
 - Tank ve mermi entity'leri.
 - Hareket ve collision fizigi.
 - Combat, respawn ve power-up sistemleri.
-- Ileride WebSocket/Game Server entegrasyonu.
+- Harita verileri ve map degisimi.
 
 ### Frontend ve asset ekibi
 
@@ -415,6 +634,7 @@ Calisma alani:
 ```text
 public/game.html
 public/js/game-client.js
+public/js/input/
 public/js/render/
 public/js/state/
 public/js/assets/
@@ -425,6 +645,7 @@ public/assets/
 Sorumluluklar:
 
 - Canvas oyun ekrani.
+- Input toplama.
 - HUD.
 - Renderer.
 - Local game state.
@@ -436,22 +657,22 @@ Sorumluluklar:
 
 `Documents/SDD.pdf` hedef mimariyi anlatir. Kod ise hedef mimarinin erken bir uygulamasidir.
 
-SDD'de hedeflenen ama henuz tam uygulanmayan basliklar:
+SDD'de hedeflenen ama henuz tam olgunlasmayan basliklar:
 
-- Authoritative Game Server.
-- WebSocket ile dusuk gecikmeli oyun iletisimi.
-- 60 Hz oyun dongusu.
+- Production kalitesinde authoritative Game Server.
+- WebSocket ile dusuk gecikmeli ve temiz reconnect/cleanup destekli oyun iletisimi.
+- Stabil ve testli 60 Hz oyun dongusu.
 - Client-side prediction.
 - Server reconciliation.
 - Entity interpolation.
 - Tam tank hareket fizigi.
 - Tam mermi fizigi.
-- Collision detection'in oyun icine entegrasyonu.
-- Health, respawn, skor ve power-up sistemleri.
+- Collision detection'in tum oyun kurallariyla tutarli entegrasyonu.
+- Health, respawn, skor, power-up ve oyun sonu sistemlerinin tamamlanmasi.
 - Tam Canvas tabanli oyun render hatti.
-- Oyunu baslatma ve Game Server'a handover sureci.
+- Oyunu baslatma sonrasi Game Server handover akisini temizlestirme.
 
-Bu farki karistirmamak onemlidir. SDD yol haritasidir; mevcut kod ise bu yolun basindaki calisan iskelettir.
+Bu farki karistirmamak onemlidir. SDD yol haritasidir; mevcut kod ise bu yolun calisan ama hala erken asamadaki uygulamasidir.
 
 ## Gelistirme Kurallari
 
@@ -461,25 +682,29 @@ Bu farki karistirmamak onemlidir. SDD yol haritasidir; mevcut kod ise bu yolun b
 - Statik HTML dosyalari `public/` altinda tutulmalidir.
 - Oyun mekanigi ve Game Server kodlari `src/game/` altina eklenmelidir.
 - Meta Server ve Game Server arasinda paylasilacak sabitler veya yardimcilar `src/shared/` altina eklenmelidir.
-- Canvas render, HUD, local state ve asset loader kodlari `public/js/` altinda ilgili alt klasorlerde tutulmalidir.
+- Canvas render, HUD, input, local state ve asset loader kodlari `public/js/` altinda ilgili alt klasorlerde tutulmalidir.
 - Asset dosyalari `public/assets/` altinda turlerine gore ayrilmalidir.
 - RAM store kullanilirken verinin kalici olmadigi unutulmamalidir.
+- `room.players` ve `session.currentRoom` birlikte guncellenmelidir; sadece birini degistirmek lobi/bekleme odasi tutarsizligi yaratir.
+- Lobi/bekleme odasi anlik bildirimleri su anda WebSocket push ile degil polling ile guncellenir.
 - `Documents/SDD.pdf` ve `Documents/SDD.tex` proje tasarim kaynaklaridir; kod davranisi ile celisen bir durum varsa once mevcut kod dogrulanmalidir.
 
 ## Bilinen Eksikler
 
 - `npm test` gercek test calistirmaz.
-- WebSocket/Game Server gercek anlamda bagli degildir.
-- Oyun dongusu iskelet seviyesindedir.
-- Gercek tank hareketi, mermi fizigi ve collision oyuna entegre degildir.
-- Combat, respawn ve power-up sistemleri placeholder seviyesindedir.
-- Canvas render sistemi placeholder seviyesindedir.
-- Oda join/start akislarinin tamamlanmis API'leri yoktur.
-- Logout veya disconnect temizleme akisi yoktur.
+- Login icin logout/disconnect server temizligi yoktur; `activeUsernames` temizlenmez.
 - RAM store icin TTL/zombi oda temizleme mekanizmasi henuz yoktur.
+- Lobi ve bekleme odasi guncellemeleri WebSocket push yerine polling ile yapilir.
+- Game Server WebSocket'e baglidir ancak oyun sistemi hala erken asamadadir.
+- Oyun dongusu, hareket, mermi, collision, combat, respawn ve power-up sistemleri tamamlanmis/denge testleri yapilmis kabul edilmemelidir.
+- Client-side prediction, reconciliation ve interpolation yoktur.
+- Reconnect ve oyun ici disconnect cleanup akislari eksiktir.
+- Canvas render ve HUD calismalari devam eden erken asama uygulamalardir.
 
 ## Temizlik Notlari
 
 - Gecici test loglari repo icinde tutulmamalidir.
 - `server-test.out.log` ve `server-test.err.log` kaynak dosya degildir.
 - Eski tek dosyali router yaklasimi tekrar canlandirilmamalidir.
+- Eski tekil `room` route semasi tekrar eklenmemelidir; guncel oda API'si `/api/rooms` altindadir.
+- Mevcut oda kurucu alaninin adi `host` tur; yeni kodda eski kurucu alan adina geri donulmemelidir.
