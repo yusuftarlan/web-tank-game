@@ -1,58 +1,54 @@
 // public/js/assets/assetLoader.js
+const assets = {};
 
-// Yüklenen tüm görselleri ve sesleri hafızada tutacağımız depo
-const assets = {
-    images: {},
-    audio: {}
+const imagePaths = {
+    // Tanklar
+    'tank-blue': '/assets/sprites/tank-blue.png',
+    'tank-red': '/assets/sprites/tank-red.png',
+    'tank-green': '/assets/sprites/tank-green.png',
+    'tank-grey': '/assets/sprites/tank-grey.png',
+    
+    // Mermiler
+    'bullet-NORMAL': '/assets/sprites/Gun_01_A.png',
+    'bullet-AOE_EXPLOSION': '/assets/sprites/AOE_BULLET.png',
+    'bullet-GHOST_BULLET': '/assets/sprites/Ghost_Bullet.png',
+    'bullet-HOMING_MISSILE': '/assets/sprites/HOMING_MISSILE.png',
+    
+    // Duvar
+    'wall': '/assets/sprites/Wall.png',
+
+    // Namlu
+        'turret': '/assets/sprites/Gun_01_A.png',
+
+    // Güçlendirmeler
+    'effect-aoe-cluster': '/assets/effects/AOE&CLUSTER_BOMB.png',
+    
+    // Patlama Animasyonu Kareleri
+    'explosion-1': '/assets/effects/Explosion_D.png',
+    'explosion-2': '/assets/effects/Explosion_E.png',
+    'explosion-3': '/assets/effects/Explosion_F.png'
 };
 
-/**
- * Tek bir görseli yükleyen ve Promise döndüren yardımcı fonksiyon.
- * @param {string} name - Görsele vereceğimiz isim (ör: 'tankBlue')
- * @param {string} src - Görselin dosya yolu (ör: '/assets/sprites/tank.png')
- * @returns {Promise} Görsel yüklendiğinde çözülen (resolve) promise.
- */
-function loadImage(name, src) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            assets.images[name] = img; // Yüklenen görseli depoya ekle
-            resolve(img);
-        };
-        img.onerror = () => {
-            // YENİ: Reject (çökme) yerine konsola uyarı basıp devam ediyoruz
-            console.warn(`[UYARI] Görsel bulunamadı: ${src}. Sistem yedek şekilleri kullanacak.`);
-            resolve(null); 
-        };
-        img.src = src;
-    });
-}
-
-/**
- * Oyunun ihtiyaç duyduğu tüm varlıkları asenkron olarak yükler.
- * Bu fonksiyon game-client.js içinde 'await' ile beklenir.
- */
 export async function loadGameAssets() {
-    console.log('Oyun varlıkları yükleniyor...');
+    const promises = Object.entries(imagePaths).map(([key, path]) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.src = path;
+            img.onload = () => {
+                assets[key] = img;
+                resolve();
+            };
+            img.onerror = () => {
+                console.error(`Görsel yüklenemedi: ${path}`);
+                resolve(); // Oyunun çökmemesi için hatayı yoksay ve devam et
+            };
+        });
+    });
 
-    const imagePromises = [
-        loadImage('tankBody', '/assets/sprites/tank-blue.png')
-    ];
-
-    try {
-        await Promise.all(imagePromises);
-        console.log('Varlık yükleme işlemi tamamlandı!');
-    } catch (error) {
-        // Artık buraya düşmeyecek çünkü loadImage hata fırlatmıyor
-        console.error('Kritik varlık hatası!', error);
-    }
+    await Promise.all(promises);
+    console.log('[SİSTEM] Tüm oyun görselleri başarıyla yüklendi.');
 }
 
-/**
- * Renderer (Çizim Motoru) tarafından yüklü görselleri almak için kullanılır.
- * @param {string} name - Alınmak istenen görselin ismi
- * @returns {HTMLImageElement} Yüklü görsel nesnesi
- */
-export function getImage(name) {
-    return assets.images[name];
+export function getImage(key) {
+    return assets[key];
 }

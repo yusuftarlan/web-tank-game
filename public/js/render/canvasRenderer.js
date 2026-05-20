@@ -1,5 +1,5 @@
 // public/js/render/canvasRenderer.js
-import { getImage } from '../assets/assetLoader.js'; // Görselleri alabilmek için import ettik
+import { getImage } from '../assets/assetLoader.js'; 
 
 const ITEM_VISUALS = {
     'HOMING_MISSILE': { emoji: '🎯', color: '#ff4757' },
@@ -9,31 +9,57 @@ const ITEM_VISUALS = {
     'AOE_EXPLOSION': { emoji: '💣', color: '#ff6348' },
     'CLUSTER_BOMB': { emoji: '💥', color: '#ff7f50' },
     'BOUNCING_BULLET': { emoji: '🪃', color: '#2ed573' },
-    'SHIELD': { emoji: '🛡️', color: '#3742fa' }
+    'SHIELD': { emoji: '🛡️', color: '#3498db'}
 };
 
 export function createCanvasRenderer(canvas) {
     const context = canvas.getContext('2d');
 
     return {
-        render(gameState) {
-            // Arka planı temizle ve çiz
+        render(gameState, activeExplosions = [], localPlayerUsername) {
             context.clearRect(0, 0, canvas.width, canvas.height);
-            context.fillStyle = '#2b2b2b';
-            context.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. ENGELLERİ (DUVARLARI) ÇİZ
+            // Yerel oyuncuyu bul (Kamera odağı için)
+            const localPlayer = gameState.players.find(p => p.username === localPlayerUsername);
+            
+            context.save();
+            
+            if (localPlayer) {
+                const zoom = 1.75; // Haritayı ne kadar yakınlaştırmak istediğin (Değiştirebilirsin)
+                
+                // Kamerayı oyuncunun üzerine merkezle
+                context.translate(canvas.width / 2, canvas.height / 2);
+                context.scale(zoom, zoom);
+                context.translate(-localPlayer.x, -localPlayer.y);
+            }
+
+            // Arka planı Full Dünya boyutunda çiz
+            context.fillStyle = '#2b2b2b';
+            context.fillRect(0, 0, gameState.world.width, gameState.world.height);
+
+            // 1. ENGELLERİ (DUVARLARI) ASSET İLE ÇİZ
             if (gameState.obstacles) {
+                const wallImg = getImage('wall');
                 gameState.obstacles.forEach(obs => {
-                    context.fillStyle = obs.color || '#555';
-                    context.fillRect(obs.x, obs.y, obs.width, obs.height);
-                    context.strokeStyle = '#222';
-                    context.lineWidth = 2;
-                    context.strokeRect(obs.x, obs.y, obs.width, obs.height);
+                    if (wallImg && wallImg.complete && wallImg.naturalWidth !== 0) {
+                        context.save();
+                        const pattern = context.createPattern(wallImg, 'repeat');
+                        context.translate(obs.x, obs.y);
+                        context.fillStyle = pattern;
+                        context.fillRect(0, 0, obs.width, obs.height);
+                        context.restore();
+
+                        context.strokeStyle = '#111';
+                        context.lineWidth = 2;
+                        context.strokeRect(obs.x, obs.y, obs.width, obs.height);
+                    } else {
+                        context.fillStyle = obs.color || '#555';
+                        context.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    }
                 });
             }
 
-            // 2. ÖZEL GÜÇLERİ VE MERMİLERİ ÇİZ (ITEMS)
+            // 2. YERDEKİ ÖZEL GÜÇLERİ ÇİZ
             if (gameState.activeItems) {
                 gameState.activeItems.forEach(item => {
                     const visual = ITEM_VISUALS[item.type] || { emoji: '❓', color: '#ffffff' };
@@ -43,9 +69,8 @@ export function createCanvasRenderer(canvas) {
                     context.arc(item.x, item.y, radius, 0, Math.PI * 2);
                     context.fillStyle = visual.color;
                     context.fill();
-                    
-                    context.lineWidth = 2;
                     context.strokeStyle = '#2f3542';
+                    context.lineWidth = 2;
                     context.stroke();
                     context.closePath();
 
@@ -61,64 +86,121 @@ export function createCanvasRenderer(canvas) {
                 context.save();
                 context.translate(player.x, player.y);
 
-                // -- TANK GÖVDESİ --
+                if (player.powerUp) {
+                    if (player.powerUp.type === 'SHIELD') {
+                        context.beginPath();
+                        context.arc(0, 0, 35, 0, Math.PI * 2);
+                        context.fillStyle = 'rgba(52, 152, 219, 0.3)';
+                        context.fill();
+                        context.strokeStyle = '#3498db';
+                        context.lineWidth = 2;
+                        context.stroke();
+                    } else if (player.powerUp.type === 'TURBO_DRIVE') {
+                        context.beginPath();
+                        context.arc(0, 0, 32, 0, Math.PI * 2);
+                        context.strokeStyle = 'rgba(230, 126, 34, 0.8)';
+                        context.lineWidth = 3;
+                        context.setLineDash([10, 15]); 
+                        context.stroke();
+                        context.setLineDash([]); 
+                    } else if (player.powerUp.type === 'RAPID_FIRE') {
+                        context.beginPath();
+                        context.arc(0, 0, 28, 0, Math.PI * 2);
+                        context.shadowBlur = 20;
+                        context.shadowColor = '#f1c40f';
+                        context.strokeStyle = '#f1c40f';
+                        context.lineWidth = 2;
+                        context.stroke();
+                        context.shadowBlur = 0; 
+                    }
+                }
+
+                // Tank Gövdesi
                 context.save();
                 context.rotate(player.rotation);
-                
-                // Asset Loader'dan yüklediğimiz görseli çekiyoruz
-                const tankImg = getImage('tankBody');
-                
-                // Görsel başarıyla yüklenmişse görseli çiz
+                const tankImg = getImage(`tank-${player.color}`);
                 if (tankImg && tankImg.complete && tankImg.naturalWidth !== 0) {
-                    // Resim varsa, merkezden hizalayarak çiz (-20, -20 konumuna 40x40 boyutlarında)
-                    context.drawImage(tankImg, -20, -20, 40, 40);
+                    context.drawImage(tankImg, -25, -25, 50, 50);
                 } else {
-                    // RESİM BULUNAMAZSA (Fallback): Mavi kutu çiz
                     context.fillStyle = player.color || '#3498db';
                     context.fillRect(-20, -15, 40, 30);
-                    context.fillStyle = '#111';
-                    context.fillRect(-22, -18, 44, 6);
-                    context.fillRect(-22, 12, 44, 6);
                 }
                 context.restore();
 
-                // -- NAMLU (Turret) --
-                // Namluyu ayrı çiziyoruz ki tankın gövdesinden bağımsız olarak fareye dönebilsin
+                // Namlu (Gun_01_A)
                 context.save();
-                context.rotate(player.turretRotation);
-                context.fillStyle = '#7f8c8d';
-                context.fillRect(0, -4, 35, 8);
+                context.rotate(player.turretRotation + (Math.PI / 2));
                 context.beginPath();
-                context.arc(0, 0, 12, 0, Math.PI * 2);
-                context.fill();
+                context.arc(0, 0, 10, 0, Math.PI * 2); // Namlunun döndüğü yere küçük bir gri kapak
+                context.fillStyle = '#7f8c8d'; // Tankın gövde tonuna yakın bir gri
+                context.fill(); 
+                const turretImg = getImage('turret');
+                if (turretImg && turretImg.complete && turretImg.naturalWidth !== 0) {
+                    context.drawImage(turretImg, -6, -31, 12, 37);
+                } else {
+                    context.fillStyle = '#7f8c8d';
+                    context.fillRect(-4, 0, 8, -35);
+                }
+                context.restore();
                 context.restore();
 
-                context.restore();
-
-                // -- OYUNCU İSMİ --
+                // İsim ve Can barları dünya koordinatlarında tankın üstünde kalır
                 context.fillStyle = '#ecf0f1';
                 context.font = '14px Arial';
                 context.textAlign = 'center';
-                context.fillText(player.username, player.x, player.y - 30);
+                context.fillText(player.username, player.x, player.y - 45);
+
+                context.fillStyle = '#e74c3c';
+                context.fillRect(player.x - 20, player.y - 35, 40, 5);
+                context.fillStyle = '#2ecc71';
+                context.fillRect(player.x - 20, player.y - 35, 40 * (player.health / 100), 5);
             });
 
             // 4. MERMİLERİ ÇİZ
             gameState.bullets.forEach(bullet => {
                 context.save();
                 context.translate(bullet.x, bullet.y);
-                context.rotate(bullet.rotation);
+                context.rotate(bullet.rotation + (Math.PI / 2));
 
-                context.fillStyle = bullet.color || '#fff';
-                context.beginPath();
-                context.arc(0, 0, bullet.radius, 0, Math.PI * 2);
-                context.fill();
-                
-                context.shadowBlur = 10;
-                context.shadowColor = bullet.color || '#fff';
-                context.fill();
+                let bulletImg = getImage(`bullet-${bullet.type}`);
+                if (!bulletImg) bulletImg = getImage('bullet-NORMAL');
 
+                let isGhost = (bullet.type === 'GHOST_BULLET');
+                if (isGhost) context.globalAlpha = 0.5;
+
+                if (bulletImg && bulletImg.complete && bulletImg.naturalWidth !== 0) {
+                    let size = (bullet.type === 'AOE_EXPLOSION') ? 24 : 16;
+                    context.drawImage(bulletImg, -size/2, -size/2, size, size);
+                } else {
+                    context.fillStyle = bullet.color || '#fff';
+                    context.beginPath();
+                    context.arc(0, 0, bullet.radius, 0, Math.PI * 2);
+                    context.fill();
+                }
                 context.restore();
             });
+
+            // 5. PATLAMALAR
+            activeExplosions.forEach(exp => {
+                let expImg;
+                if (exp.type === 'AOE' || exp.type === 'CLUSTER') {
+                    expImg = getImage('effect-aoe-cluster');
+                } else {
+                    if (exp.frame < 10) expImg = getImage('explosion-1');
+                    else if (exp.frame < 20) expImg = getImage('explosion-2');
+                    else expImg = getImage('explosion-3');
+                }
+
+                if (expImg && expImg.complete && expImg.naturalWidth !== 0) {
+                    context.save();
+                    context.translate(exp.x, exp.y);
+                    const size = (exp.type === 'AOE') ? 240 : 120;
+                    context.drawImage(expImg, -size/2, -size/2, size, size);
+                    context.restore();
+                }
+            });
+
+            context.restore(); // Kamerayı sıfırla
         }
     };
 }

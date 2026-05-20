@@ -24,11 +24,14 @@ export function initInput(canvas) {
     window.addEventListener('keyup', (e) => handleKey(e.code, false));
 
     // Fare canvas üzerinde hareket ettiğinde (namluyu çevirmek için)
-    canvas.addEventListener('mousemove', (e) => {
-        // Canvas'ın ekrandaki gerçek konumunu alıyoruz ki farenin tam oyun içi X,Y'sini bulalım
+    window.addEventListener('mousemove', (e) => {
+        // ÇÖZÜM: Ekran çözünürlüğü ile oyun içi (1920x1080) çözünürlüğü oranla
         const rect = canvas.getBoundingClientRect();
-        inputState.mouseX = e.clientX - rect.left;
-        inputState.mouseY = e.clientY - rect.top;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        inputState.mouseX = (e.clientX - rect.left) * scaleX;
+        inputState.mouseY = (e.clientY - rect.top) * scaleY;
     });
 
     // Farenin sol tuşuna basıldığında (ateş etmek için)

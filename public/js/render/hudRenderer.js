@@ -1,20 +1,47 @@
 // public/js/render/hudRenderer.js
-
 export function createHudRenderer(hudElement) {
     return {
         render(gameState) {
-            // Şimdilik ilk oyuncuyu (local_player_1) yerel oyuncumuz kabul ediyoruz
-            const localPlayer = gameState.players[0];
-            if (!localPlayer) return;
+            if (!gameState || !gameState.players) return;
+            
+            hudElement.innerHTML = ''; 
+            
+            const players = gameState.players.slice(0, 4);
+            
+            players.forEach((player, index) => {
+                const panel = document.createElement('div');
+                panel.className = `player-panel corner-${index}`;
+                
+                // Asset isimleri (Yüklediğiniz dosya isimlerine göre)
+                const bodyImgSrc = `/assets/sprites/tank-${player.color || 'blue'}.png`;
+                const turretImgSrc = `/assets/sprites/Gun_01_A.png`;
+                
+                let healthColor = '#2ecc71'; 
+                if (player.health < 60) healthColor = '#f39c12'; 
+                if (player.health < 30) healthColor = '#e74c3c'; 
+                
+                const kills = Math.floor(player.score / 10) || 0;
 
-            // HUD elementinin içeriğini HTML olarak güncelle
-            hudElement.innerHTML = `
-                <div style="position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; text-shadow: 1px 1px 2px black;">
-                    <h2 style="margin: 0; font-size: 18px;">${localPlayer.username}</h2>
-                    <p style="margin: 5px 0 0 0; font-size: 16px; color: #e74c3c;">Can: ${localPlayer.health}</p>
-                    <p style="margin: 5px 0 0 0; font-size: 16px; color: #f1c40f;">Skor: ${localPlayer.score}</p>
-                </div>
-            `;
+                panel.innerHTML = `
+                    <div class="tank-avatar-container">
+                        <img src="${bodyImgSrc}" class="tank-body-sprite" onerror="this.src='/assets/sprites/tank-blue.png'">
+                        <img src="${turretImgSrc}" class="tank-turret-sprite">
+                    </div>
+                    
+                    <div class="panel-info">
+                        <div class="player-name" style="color: ${player.color}">${player.username}</div>
+                        <div class="health-bar-container">
+                            <div class="health-bar-fill" style="width: ${Math.max(0, player.health)}%; background-color: ${healthColor};"></div>
+                        </div>
+                        <div class="player-stats">
+                            <span>💖 Can: ${Math.max(0, Math.floor(player.health))}</span>
+                            <span>⚔️ Leş: ${kills}</span>
+                        </div>
+                    </div>
+                `;
+                
+                hudElement.appendChild(panel);
+            });
         }
     };
 }

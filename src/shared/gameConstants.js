@@ -1,8 +1,8 @@
 export const GAME_TICK_RATE = 60;
 export const DEFAULT_MAX_PLAYERS = 4;
 export const TANK_MAX_HEALTH = 100;
-export const MAP_WIDTH = 800;
-export const MAP_HEIGHT = 600;
+export const MAP_WIDTH = 1920;
+export const MAP_HEIGHT = 1080;
 export const POWERUP_SPAWN_INTERVAL = 10000;
 
 export const POWERUP_TYPES = {
