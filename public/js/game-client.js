@@ -3,6 +3,8 @@ import { createCanvasRenderer } from './render/canvasRenderer.js';
 import { createHudRenderer } from './render/hudRenderer.js';
 import { loadGameAssets } from './assets/assetLoader.js';
 import { initInput, getInputState } from './input/inputManager.js';
+// 1. EKSİK OLAN İÇE AKTARMA İŞLEMİ (EKLENDİ)
+import { createGameState } from './state/gameState.js'; 
 
 const canvas = document.getElementById('game-canvas');
 const hud = document.getElementById('game-hud');
@@ -12,19 +14,15 @@ const hudRenderer = createHudRenderer(hud);
 
 initInput(canvas);
 
-let gameState = {
-    players: [],
-    bullets: [],
-    obstacles: [],
-    world: { width: 960, height: 540 }
-};
+// 2. HARDCODED OBJEYİ SİLDİK, SENİN YAZDIĞIN FONKSİYONU ÇAĞIRDIK (DEĞİŞTİRİLDİ)
+let gameState = createGameState(); 
 
 let socket;
 let isConnected = false;
 
 function initNetwork() {
     const token = sessionStorage.getItem('token');
-    const username = sessionStorage.getItem('username') || 'Misafir'; // YENİ: Kullanıcı adını da alıyoruz
+    const username = sessionStorage.getItem('username') || 'Misafir'; 
     
     if (!token) {
         console.warn("Kullanıcı girişi bulunamadı. Lobiye dönülüyor...");
@@ -33,7 +31,6 @@ function initNetwork() {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // YENİ: Sunucuya token ile birlikte kullanıcı adımızı da gönderiyoruz ki sunucu bizi unutursa hatırlatabilelim.
     const wsUrl = `${protocol}//${window.location.host}/?token=${token}&username=${encodeURIComponent(username)}`;
 
     try {
@@ -48,7 +45,10 @@ function initNetwork() {
             const message = JSON.parse(event.data);
             
             if (message.type === 'GAME_STATE_UPDATE') {
-                gameState = message.state;
+                // 3. GEÇİCİ BİR UYARI: Eğer sunucu tarafını halletmediysen, 
+                // sunucudan gelen boş obje senin sahte (mock) verilerini ezecektir.
+                // Eğer sunucudan güçler gelmezse, aşağıdaki satırı geçici olarak yorum satırı yapabilirsin:
+                gameState = message.state; 
             }
         };
 

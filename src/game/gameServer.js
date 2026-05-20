@@ -14,6 +14,10 @@ function checkCollision(rect1, rect2) {
 const FIRE_RATE = 300; 
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 4;
+const POWERUP_DURATION = 8000; // YENİ: Özellikler tam 8 saniye sürecek
+
+const ITEM_TYPES = ['HOMING_MISSILE', 'RAPID_FIRE', 'TURBO_DRIVE', 'AOE_EXPLOSION', 'CLUSTER_BOMB', 'BOUNCING_BULLET', 'GHOST_BULLET', 'SHIELD'];
+const ITEM_SPAWN_INTERVAL = 15000;
 
 function startGameLoop(roomId, room) {
     if (room.gameInterval) return;
@@ -23,12 +27,61 @@ function startGameLoop(roomId, room) {
     room.gameInterval = setInterval(() => {
         const now = Date.now();
 
+        // 1. ÖZEL GÜÇ ÜRETME SİSTEMİ
+        if (now - room.gameState.lastItemSpawnTime > ITEM_SPAWN_INTERVAL) {
+            let isSafe = false;
+            let spawnX, spawnY;
+            const radius = 15;
+            const itemRect = { width: radius * 2, height: radius * 2 };
+            
+            let attempts = 0;
+            while (!isSafe && attempts < 50) {
+                spawnX = Math.random() * (room.gameState.world.width - radius * 4) + radius * 2;
+                spawnY = Math.random() * (room.gameState.world.height - radius * 4) + radius * 2;
+                itemRect.x = spawnX - radius;
+                itemRect.y = spawnY - radius;
+
+                isSafe = true;
+                for (const obs of room.gameState.obstacles) {
+                    if (checkCollision(itemRect, obs)) {
+                        isSafe = false;
+                        break;
+                    }
+                }
+                attempts++;
+            }
+
+            if (isSafe) {
+                const type = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+                room.gameState.activeItems.push({
+                    id: `item_${Date.now()}_${Math.floor(Math.random()*1000)}`,
+                    type: type,
+                    x: spawnX,
+                    y: spawnY,
+                    radius: radius
+                });
+                console.log(`[SİSTEM] Haritada yeni özellik belirdi: ${type}`);
+            }
+            room.gameState.lastItemSpawnTime = now;
+        }
+
+        // 2. OYUNCU (TANK) HAREKET VE ATEŞLEME KONTROLLERİ
         Object.values(room.gameState.players).forEach(player => {
             if (player.health <= 0) return; 
-
             if (!player.input) return;
 
-            const speed = 4;
+            // --- YENİ: GÜÇ SÜRESİ KONTROLÜ (8 Saniye doldu mu?) ---
+            if (player.powerUp && now > player.powerUp.expiresAt) {
+                console.log(`[SİSTEM] ${player.username} komutanın ${player.powerUp.type} özelliği bitti.`);
+                player.powerUp = null; 
+            }
+
+            // --- YENİ: TURBO_DRIVE Hızlandırması ---
+            let speed = 4;
+            if (player.powerUp && player.powerUp.type === 'TURBO_DRIVE') {
+                speed = 6; // %50 artış
+            }
+
             let moveX = 0;
             let moveY = 0;
 
@@ -69,28 +122,83 @@ function startGameLoop(roomId, room) {
             const dy = player.input.mouseY - player.y;
             player.turretRotation = Math.atan2(dy, dx);
 
-            if (player.input.isShooting && (now - player.lastShotTime > FIRE_RATE)) {
+            // --- YENİ: RAPID_FIRE Seri Ateşleme ---
+            let currentFireRate = FIRE_RATE;
+            if (player.powerUp && player.powerUp.type === 'RAPID_FIRE') {
+                currentFireRate = FIRE_RATE * 0.25; // %75 bekleme süresi azalır
+            }
+
+            if (player.input.isShooting && (now - player.lastShotTime > currentFireRate)) {
                 const barrelOffsetX = Math.cos(player.turretRotation) * 40;
                 const barrelOffsetY = Math.sin(player.turretRotation) * 40;
 
+                // Mermiye tankın mevcut gücünü (özelliğini) aktar
+                let bulletType = 'NORMAL';
+                if (player.powerUp && ['GHOST_BULLET', 'HOMING_MISSILE', 'AOE_EXPLOSION', 'CLUSTER_BOMB', 'BOUNCING_BULLET'].includes(player.powerUp.type)) {
+                    bulletType = player.powerUp.type;
+                }
+
                 room.gameState.bullets.push({
                     id: Math.random().toString(36).substr(2, 9),
-                    ownerId: player.username, 
+                    ownerId: player.username,
+                    type: bulletType, // Mermi tipi eklendi
                     x: player.x + barrelOffsetX,
                     y: player.y + barrelOffsetY,
                     rotation: player.turretRotation,
                     speed: BULLET_SPEED,
                     radius: BULLET_RADIUS,
-                    color: '#f1c40f'
+                    color: bulletType === 'NORMAL' ? '#f1c40f' : '#ff4757' // Özel mermiler kırmızı görünsün
                 });
                 
                 player.lastShotTime = now;
             }
+
+            // ÖZEL GÜÇ TOPLAMA (ÇARPIŞMA)
+            const playerRectForItems = { x: player.x - 20, y: player.y - 15, width: 40, height: 30 };
+            for (let i = room.gameState.activeItems.length - 1; i >= 0; i--) {
+                const item = room.gameState.activeItems[i];
+                const itemRect = { x: item.x - item.radius, y: item.y - item.radius, width: item.radius * 2, height: item.radius * 2 };
+                
+                if (checkCollision(playerRectForItems, itemRect)) {
+                    console.log(`[GÜÇ] ${player.username}, ${item.type} özelliğini aldı! (8 saniye)`);
+                    
+                    // --- YENİ: GÜCÜ TANKA AKTAR VE SÜRE BAŞLAT ---
+                    player.powerUp = {
+                        type: item.type,
+                        expiresAt: now + POWERUP_DURATION
+                    };
+                    
+                    room.gameState.activeItems.splice(i, 1);
+                }
+            }
         });
 
+        // 3. MERMİ FİZİĞİ VE GÜÇ ETKİLERİ
         for (let i = room.gameState.bullets.length - 1; i >= 0; i--) {
             const bullet = room.gameState.bullets[i];
             
+            // --- YENİ: HOMING_MISSILE (Güdümlü Füze) Yönelme Mantığı ---
+            if (bullet.type === 'HOMING_MISSILE') {
+                let nearestDist = Infinity;
+                let targetPlayer = null;
+                for (const pName in room.gameState.players) {
+                    const p = room.gameState.players[pName];
+                    if (p.username !== bullet.ownerId && p.health > 0) {
+                        const dist = Math.hypot(p.x - bullet.x, p.y - bullet.y);
+                        if (dist < nearestDist) {
+                            nearestDist = dist;
+                            targetPlayer = p;
+                        }
+                    }
+                }
+                if (targetPlayer) {
+                    const desiredRotation = Math.atan2(targetPlayer.y - bullet.y, targetPlayer.x - bullet.x);
+                    // Mermi hedefe doğru yavaşça kavis çizer (0.05 katsayısı)
+                    const angleDiff = Math.atan2(Math.sin(desiredRotation - bullet.rotation), Math.cos(desiredRotation - bullet.rotation));
+                    bullet.rotation += angleDiff * 0.05; 
+                }
+            }
+
             bullet.x += Math.cos(bullet.rotation) * bullet.speed;
             bullet.y += Math.sin(bullet.rotation) * bullet.speed;
 
@@ -106,15 +214,33 @@ function startGameLoop(roomId, room) {
                 height: bullet.radius * 2 
             };
 
-            if (!isDestroyed) {
+            // --- YENİ: DUVAR ÇARPIŞMASI (GHOST VE BOUNCING) ---
+            if (!isDestroyed && bullet.type !== 'GHOST_BULLET') { // Ghost duvarı pas geçer
                 for (const obs of room.gameState.obstacles) {
                     if (checkCollision(bulletRect, obs)) {
-                        isDestroyed = true;
+                        if (bullet.type === 'BOUNCING_BULLET') {
+                            // Sekme Fiziği (Basit AABB yansıması)
+                            const overlapX = Math.min(bulletRect.x + bulletRect.width - obs.x, obs.x + obs.width - bulletRect.x);
+                            const overlapY = Math.min(bulletRect.y + bulletRect.height - obs.y, obs.y + obs.height - bulletRect.y);
+                            
+                            let vx = Math.cos(bullet.rotation) * bullet.speed;
+                            let vy = Math.sin(bullet.rotation) * bullet.speed;
+                            
+                            if (overlapX < overlapY) vx *= -1; // X ekseninde sek
+                            else vy *= -1; // Y ekseninde sek
+                            
+                            bullet.rotation = Math.atan2(vy, vx);
+                            bullet.x += vx; // Duvara sıkışmayı engellemek için it
+                            bullet.y += vy;
+                        } else {
+                            isDestroyed = true;
+                        }
                         break;
                     }
                 }
             }
 
+            // TANK ÇARPIŞMASI
             if (!isDestroyed) {
                 for (const targetName in room.gameState.players) {
                     const target = room.gameState.players[targetName];
@@ -124,24 +250,30 @@ function startGameLoop(roomId, room) {
                         
                         if (checkCollision(bulletRect, targetRect)) {
                             isDestroyed = true;
-                            target.health -= 25; 
                             
-                            if (target.health <= 0) {
-                                if (room.gameState.players[bullet.ownerId]) {
-                                    room.gameState.players[bullet.ownerId].score += 10;
-                                }
+                            // --- YENİ: SHIELD (Kalkan) KONTROLÜ ---
+                            if (target.powerUp && target.powerUp.type === 'SHIELD') {
+                                console.log(`[SAVAŞ] ${target.username} kalkanı sayesinde hasar almadı! Kalkan kırıldı.`);
+                                target.powerUp = null; // Hasar alma, ama kalkan kırılsın
+                            } else {
+                                target.health -= 25; 
                                 
-                                console.log(`[SAVAŞ] ${bullet.ownerId}, ${target.username} adlı komutanı yok etti!`);
-                                
-                                setTimeout(() => {
-                                    if (room.gameState.players[targetName]) {
-                                        const p = room.gameState.players[targetName];
-                                        p.health = 100;
-                                        p.x = 480 + (Math.random() * 400 - 200);
-                                        p.y = 270 + (Math.random() * 200 - 100);
-                                        console.log(`[SAVAŞ] ${target.username} savaş alanına geri döndü!`);
+                                if (target.health <= 0) {
+                                    if (room.gameState.players[bullet.ownerId]) {
+                                        room.gameState.players[bullet.ownerId].score += 10;
                                     }
-                                }, 3000);
+                                    console.log(`[SAVAŞ] ${bullet.ownerId}, ${target.username} adlı komutanı yok etti!`);
+                                    
+                                    setTimeout(() => {
+                                        if (room.gameState.players[targetName]) {
+                                            const p = room.gameState.players[targetName];
+                                            p.health = 100;
+                                            p.powerUp = null; // Ölünce üstündeki gücü temizle
+                                            p.x = 480 + (Math.random() * 400 - 200);
+                                            p.y = 270 + (Math.random() * 200 - 100);
+                                        }
+                                    }, 3000);
+                                }
                             }
                             break; 
                         }
@@ -149,7 +281,27 @@ function startGameLoop(roomId, room) {
                 }
             }
 
+            // --- YENİ: AOE_EXPLOSION (Alan Hasarı) ---
             if (isDestroyed) {
+                if (bullet.type === 'AOE_EXPLOSION') {
+                    const explosionRadius = 80;
+                    for (const pName in room.gameState.players) {
+                        const p = room.gameState.players[pName];
+                        if (p.health > 0) {
+                            const dist = Math.hypot(p.x - bullet.x, p.y - bullet.y);
+                            if (dist < explosionRadius) {
+                                // Merkeze yakın olan daha çok hasar alır
+                                const aoeDamage = 35 * (1 - dist / explosionRadius);
+                                if (p.powerUp && p.powerUp.type === 'SHIELD') {
+                                    p.powerUp = null; // Kalkana çarptıysa kalkan kırılır
+                                } else {
+                                    p.health -= aoeDamage;
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 room.gameState.bullets.splice(i, 1);
             }
         }
@@ -158,6 +310,7 @@ function startGameLoop(roomId, room) {
             players: Object.values(room.gameState.players),
             bullets: room.gameState.bullets,
             obstacles: room.gameState.obstacles,
+            activeItems: room.gameState.activeItems, 
             world: room.gameState.world
         };
 
@@ -181,17 +334,14 @@ export function initGameServer(server) {
     wss.on('connection', (ws, req) => {
         const url = new URL(req.url, `http://${req.headers.host}`);
         const token = url.searchParams.get('token');
-        const clientUsername = url.searchParams.get('username') || 'Misafir'; // YENİ EKLENDİ
+        const clientUsername = url.searchParams.get('username') || 'Misafir'; 
 
         if (!token) {
             ws.close();
             return;
         }
 
-        // YENİ: Oturum Kurtarma Mekanizması
-        // Eğer sunucu yeniden başlatıldıysa ve eski bir token geldiyse, bağlantıyı kesmek yerine oturumu kurtar.
         if (!activeSessions.has(token)) {
-            console.warn(`[UYARI] Sunucu sıfırlanmış. ${clientUsername} için oturum otomatik kurtarılıyor.`);
             activeSessions.set(token, {
                 username: clientUsername,
                 currentRoom: 'test-room'
@@ -216,6 +366,8 @@ export function initGameServer(server) {
             room.gameState = {
                 players: {},
                 bullets: [],
+                activeItems: [], 
+                lastItemSpawnTime: Date.now(), 
                 obstacles: [
                     { x: 150, y: 150, width: 200, height: 40, color: '#555' },
                     { x: 650, y: 150, width: 40, height: 200, color: '#555' },
@@ -240,6 +392,7 @@ export function initGameServer(server) {
             turretRotation: 0,
             health: 100,
             score: 0,
+            powerUp: null, // Tank doğduğunda güç sıfırlanır
             color: colors[colorIndex],
             lastShotTime: 0, 
             input: { up: false, down: false, left: false, right: false, mouseX: 0, mouseY: 0, isShooting: false }
@@ -264,7 +417,6 @@ export function initGameServer(server) {
         });
 
         ws.on('close', () => {
-            console.log(`[WEBSOCKET] [Koptu]: Komutan ${username} ayrıldı.`);
             room.clients.delete(ws);
             delete room.gameState.players[username];
             
@@ -274,6 +426,4 @@ export function initGameServer(server) {
             }
         });
     });
-
-    console.log('[SİSTEM] WebSocket (Game Server) başlatıldı ve bağlantıları bekliyor.');
-}   
+}

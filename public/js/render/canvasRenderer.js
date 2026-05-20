@@ -8,7 +8,8 @@ const ITEM_VISUALS = {
     'TURBO_DRIVE': { emoji: '⚡', color: '#1e90ff' },
     'AOE_EXPLOSION': { emoji: '💣', color: '#ff6348' },
     'CLUSTER_BOMB': { emoji: '💥', color: '#ff7f50' },
-    'BOUNCING_BULLET': { emoji: '🪃', color: '#2ed573' }
+    'BOUNCING_BULLET': { emoji: '🪃', color: '#2ed573' },
+    'SHIELD': { emoji: '🛡️', color: '#3742fa' }
 };
 
 export function createCanvasRenderer(canvas) {

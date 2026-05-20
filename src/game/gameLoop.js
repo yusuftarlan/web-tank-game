@@ -6,7 +6,15 @@ export function createGameLoop() {
         tickRate: GAME_TICK_RATE,
         isRunning: false,
         lastTickTime: Date.now(),
-        powerUpSystem: createPowerUpSystem()
+        // Sunucu state'ine güç sistemini ekliyoruz
+        powerUpSystem: createPowerUpSystem(), 
+        players: new Map(), // Muhtemelen sende olan diğer veriler
+        bullets: [],
+        obstacles: [
+            { x: 150, y: 150, width: 200, height: 40, color: '#555' },
+            { x: 650, y: 150, width: 40, height: 200, color: '#555' },
+            { x: 300, y: 400, width: 300, height: 40, color: '#555' }
+        ]
     };
 }
 
