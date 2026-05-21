@@ -1,7 +1,5 @@
 // public/js/game-room.js
 
-<<<<<<< HEAD
-=======
 // Ripple Effect Fonksiyonu
 function createRipple(event) {
     const button = event.currentTarget;
@@ -28,7 +26,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
->>>>>>> 6d80468 (feat: Add frontend animations and interactive effects)
 const urlParams = new URLSearchParams(window.location.search);
 const roomId = urlParams.get('roomId');
 const token = sessionStorage.getItem('token');

@@ -1,7 +1,5 @@
 // public/js/main-menu.js
 
-<<<<<<< HEAD
-=======
 // Ripple Effect Fonksiyonu
 function createRipple(event) {
     const button = event.currentTarget;
@@ -28,7 +26,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
->>>>>>> 6d80468 (feat: Add frontend animations and interactive effects)
 async function loadRooms() {
     const token = sessionStorage.getItem('token');
     if (!token) { 
@@ -56,11 +53,7 @@ async function loadRooms() {
 
         // Odaları HTML olarak bas
         roomList.innerHTML = data.rooms.map(room => `
-<<<<<<< HEAD
-            <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 flex justify-between items-center hover:border-emerald-500/50 transition">
-=======
             <div class="room-item bg-slate-900 p-4 rounded-lg border border-slate-700 flex justify-between items-center hover:border-emerald-500/50 transition">
->>>>>>> 6d80468 (feat: Add frontend animations and interactive effects)
                 <div>
                     <h4 class="text-emerald-400 font-bold text-lg">${room.name}</h4>
                     <p class="text-xs text-slate-400">Kurucu: ${room.host}</p>

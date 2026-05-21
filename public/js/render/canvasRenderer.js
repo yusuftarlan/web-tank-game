@@ -25,11 +25,12 @@ function smoothAngle(current, target) {
     return normalizeAngle(current + normalizeAngle(target - current) * ROTATION_SMOOTHING);
 }
 
-export function createCanvasRenderer(canvas) {
+export function createCanvasRenderer(canvas, options = {}) {
     const context = canvas.getContext('2d');
     const playerRenderAngles = new Map();
     let wallPattern = null;
     let wallPatternImage = null;
+    const cameraMode = options.cameraMode || 'follow-player';
 
     function getWallPattern(wallImg) {
         if (!wallImg || !wallImg.complete || wallImg.naturalWidth === 0) return null;
@@ -58,7 +59,9 @@ export function createCanvasRenderer(canvas) {
             
             context.save();
             
-            if (localPlayer) {
+            if (cameraMode === 'full-map') {
+                context.scale(canvas.width / world.width, canvas.height / world.height);
+            } else if (localPlayer) {
                 // Kamerayı oyuncunun üzerine merkezle
                 context.translate(canvas.width / 2 + cameraShake.x, canvas.height / 2 + cameraShake.y);
                 context.scale(CAMERA_ZOOM, CAMERA_ZOOM);

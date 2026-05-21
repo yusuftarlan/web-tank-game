@@ -15,6 +15,7 @@ canvas.height = 1080;
 const hud = document.getElementById('game-hud');
 const networkDebug = document.getElementById('network-debug');
 const damageOverlay = document.getElementById('damage-overlay');
+const matchEndOverlay = document.getElementById('match-end-overlay');
 const canvasRenderer = createCanvasRenderer(canvas);
 const hudRenderer = createHudRenderer(hud);
 const audioManager = createAudioManager();
@@ -40,6 +41,7 @@ const roomId = gameUrlParams.get('roomId') || sessionStorage.getItem('roomId');
 const gameId = gameUrlParams.get('gameId') || sessionStorage.getItem('gameId');
 let previousLocalHealth = null;
 let previousLocalAmmo = null;
+let matchEnded = false;
 let lastFrameTime = performance.now();
 let lastInputSendTime = 0;
 let lastSentInputKey = '';
@@ -215,6 +217,7 @@ function sendPingIfNeeded(now) {
 }
 
 function sendInputIfNeeded(now, localPlayer) {
+    if (matchEnded) return;
     if (!isConnected || socket.readyState !== WebSocket.OPEN) return;
     if (now - lastInputSendTime < INPUT_SEND_INTERVAL_MS) return;
 
@@ -307,6 +310,58 @@ function renderHudIfNeeded(player) {
     hudRenderer.render({ players: [player] });
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function renderStandings(standings = []) {
+    return `
+        <div class="match-standings">
+            ${standings.map(player => `
+                <div class="match-standing-row">
+                    <span class="match-standing-rank">#${player.rank}</span>
+                    <span>${escapeHtml(player.username)}</span>
+                    <span class="match-standing-score">${Number(player.kills) || 0} les</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function showMatchEndOverlay(payload = {}) {
+    if (!matchEndOverlay) return;
+    if (matchEnded && !matchEndOverlay.classList.contains('hidden')) return;
+
+    const winnerUsername = payload.winnerUsername || 'Kazanan';
+    const standings = Array.isArray(payload.standings) ? payload.standings : [];
+
+    matchEnded = true;
+    matchEndOverlay.innerHTML = `
+        <div class="offline-victory-panel">
+            <div class="offline-victory-kicker">Online savas bitti</div>
+            <h1 class="offline-victory-title">${escapeHtml(winnerUsername)} kazandi</h1>
+            <div class="offline-victory-meta">
+                <div class="offline-victory-badge">Hedef: ${Number(payload.winKills) || 10} les</div>
+            </div>
+            ${renderStandings(standings)}
+            <div class="match-end-actions">
+                <a id="online-main-menu-button" class="match-end-button" href="/main-menu">ANA MENU</a>
+            </div>
+        </div>
+    `;
+    matchEndOverlay.classList.remove('hidden');
+    document.getElementById('online-main-menu-button')?.addEventListener('click', () => {
+        sessionStorage.removeItem('roomId');
+        sessionStorage.removeItem('gameId');
+    });
+}
+
 function resetInterpolationBuffer() {
     stateBuffer = [];
     if (gameState) {
@@ -344,6 +399,8 @@ function initNetwork() {
                 if (Number.isFinite(message.sentAt)) {
                     networkStats.ping = performance.now() - message.sentAt;
                 }
+            } else if (message.type === 'GAME_OVER') {
+                showMatchEndOverlay(message.payload);
             } else if (message.type === 'EXPLOSION') {
                 audioManager.playExplosion();
                 activeExplosions.push({

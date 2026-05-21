@@ -1,7 +1,5 @@
 // public/js/login.js
 
-<<<<<<< HEAD
-=======
 // Ripple Effect Fonksiyonu
 function createRipple(event) {
     const button = event.currentTarget;
@@ -28,7 +26,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
->>>>>>> 6d80468 (feat: Add frontend animations and interactive effects)
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault(); // Sayfanın yenilenmesini engelle
     
