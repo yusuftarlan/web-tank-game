@@ -28,13 +28,32 @@ function smoothAngle(current, target) {
 export function createCanvasRenderer(canvas) {
     const context = canvas.getContext('2d');
     const playerRenderAngles = new Map();
+    let wallPattern = null;
+    let wallPatternImage = null;
+
+    function getWallPattern(wallImg) {
+        if (!wallImg || !wallImg.complete || wallImg.naturalWidth === 0) return null;
+        if (wallPattern && wallPatternImage === wallImg) return wallPattern;
+
+        wallPattern = context.createPattern(wallImg, 'repeat');
+        wallPatternImage = wallImg;
+        return wallPattern;
+    }
 
     return {
         render(gameState, activeExplosions = [], localPlayerUsername, feedback = {}) {
+            if (!gameState) return;
+
+            const players = Array.isArray(gameState.players) ? gameState.players : [];
+            const bullets = Array.isArray(gameState.bullets) ? gameState.bullets : [];
+            const obstacles = Array.isArray(gameState.obstacles) ? gameState.obstacles : [];
+            const activeItems = Array.isArray(gameState.activeItems) ? gameState.activeItems : [];
+            const world = gameState.world || { width: canvas.width, height: canvas.height };
+
             context.clearRect(0, 0, canvas.width, canvas.height);
 
             // Yerel oyuncuyu bul (Kamera odağı için)
-            const localPlayer = gameState.players.find(p => p.username === localPlayerUsername);
+            const localPlayer = players.find(p => p.username === localPlayerUsername);
             const cameraShake = feedback.cameraShake || { x: 0, y: 0 };
             
             context.save();
@@ -48,15 +67,14 @@ export function createCanvasRenderer(canvas) {
 
             // Arka planı Full Dünya boyutunda çiz
             context.fillStyle = '#2b2b2b';
-            context.fillRect(0, 0, gameState.world.width, gameState.world.height);
+            context.fillRect(0, 0, world.width, world.height);
 
             // 1. ENGELLERİ (DUVARLARI) ASSET İLE ÇİZ
-            if (gameState.obstacles) {
-                const wallImg = getImage('wall');
-                gameState.obstacles.forEach(obs => {
-                    if (wallImg && wallImg.complete && wallImg.naturalWidth !== 0) {
+            if (obstacles.length > 0) {
+                const pattern = getWallPattern(getImage('wall'));
+                obstacles.forEach(obs => {
+                    if (pattern) {
                         context.save();
-                        const pattern = context.createPattern(wallImg, 'repeat');
                         context.translate(obs.x, obs.y);
                         context.fillStyle = pattern;
                         context.fillRect(0, 0, obs.width, obs.height);
@@ -73,8 +91,8 @@ export function createCanvasRenderer(canvas) {
             }
 
             // 2. YERDEKİ ÖZEL GÜÇLERİ ÇİZ
-            if (gameState.activeItems) {
-                gameState.activeItems.forEach(item => {
+            if (activeItems.length > 0) {
+                activeItems.forEach(item => {
                     const visual = ITEM_VISUALS[item.type] || { emoji: '❓', color: '#ffffff' };
                     const radius = item.radius || 15;
 
@@ -97,7 +115,7 @@ export function createCanvasRenderer(canvas) {
             // 3. OYUNCULARI (TANKLARI) ÇİZ
             const visiblePlayerKeys = new Set();
 
-            gameState.players.forEach(player => {
+            players.forEach(player => {
                 const playerKey = player.id || player.username;
                 visiblePlayerKeys.add(playerKey);
 
@@ -191,7 +209,7 @@ export function createCanvasRenderer(canvas) {
             });
 
             // 4. MERMİLERİ ÇİZ
-            gameState.bullets.forEach(bullet => {
+            bullets.forEach(bullet => {
                 context.save();
                 context.translate(bullet.x, bullet.y);
                 context.rotate(bullet.rotation + SPRITE_UP_TO_RIGHT_OFFSET);

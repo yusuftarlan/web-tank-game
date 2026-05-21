@@ -113,20 +113,25 @@ function playFallback(soundName, amount = 0) {
     }
 }
 
-function createSample(soundName, path) {
-    if (typeof Audio === 'undefined') return null;
+async function loadAudioBuffer(soundName, path) {
+    const context = getAudioContext();
+    if (!context) return null;
 
-    const audio = new Audio(path);
-    audio.preload = 'auto';
-    audio.volume = SOUND_VOLUMES[soundName] ?? 0.5;
-    return audio;
+    const response = await fetch(path, { cache: 'force-cache' });
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    const audioData = await response.arrayBuffer();
+    return context.decodeAudioData(audioData);
 }
 
 export function createAudioManager() {
-    const samples = new Map();
+    const buffers = new Map();
     const unavailableSounds = new Set();
     const warningShown = new Set();
     const lastPlayedAt = new Map();
+    let preloadPromise = null;
 
     function markUnavailable(soundName) {
         unavailableSounds.add(soundName);
@@ -136,17 +141,6 @@ export function createAudioManager() {
             console.warn(`[AUDIO] Missing or blocked sound file: ${SOUND_PATHS[soundName]}`);
         }
     }
-
-    Object.entries(SOUND_PATHS).forEach(([soundName, path]) => {
-        const sample = createSample(soundName, path);
-        if (!sample) {
-            markUnavailable(soundName);
-            return;
-        }
-
-        sample.addEventListener('error', () => markUnavailable(soundName), { once: true });
-        samples.set(soundName, sample);
-    });
 
     function attachUnlockListeners() {
         if (unlockListenersAttached) return;
@@ -168,32 +162,59 @@ export function createAudioManager() {
         return true;
     }
 
+    async function preloadSound(soundName, path) {
+        if (buffers.has(soundName) || unavailableSounds.has(soundName)) return;
+
+        try {
+            const buffer = await loadAudioBuffer(soundName, path);
+            if (!buffer) {
+                markUnavailable(soundName);
+                return;
+            }
+
+            buffers.set(soundName, buffer);
+        } catch (error) {
+            markUnavailable(soundName);
+        }
+    }
+
+    function preload() {
+        if (!preloadPromise) {
+            preloadPromise = Promise.all(
+                Object.entries(SOUND_PATHS).map(([soundName, path]) => preloadSound(soundName, path))
+            ).then(() => undefined);
+        }
+
+        return preloadPromise;
+    }
+
     function playSample(soundName, amount = 0) {
         safeResume();
 
         if (!canPlay(soundName)) return;
 
-        const sample = samples.get(soundName);
-        if (!sample || unavailableSounds.has(soundName)) {
+        const context = getAudioContext();
+        const buffer = buffers.get(soundName);
+        if (!context || !masterGain || !buffer || unavailableSounds.has(soundName)) {
             playFallback(soundName, amount);
             return;
         }
 
-        const instance = sample.cloneNode(true);
-        instance.volume = SOUND_VOLUMES[soundName] ?? sample.volume;
+        const source = context.createBufferSource();
+        const gain = context.createGain();
 
-        const playPromise = instance.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(() => {
-                markUnavailable(soundName);
-                playFallback(soundName, amount);
-            });
-        }
+        source.buffer = buffer;
+        gain.gain.value = SOUND_VOLUMES[soundName] ?? 0.5;
+        source.connect(gain);
+        gain.connect(masterGain);
+        source.start(context.currentTime);
     }
 
     attachUnlockListeners();
 
     return {
+        preload,
+
         playDamage(amount = 0) {
             playSample('damage', amount);
         },

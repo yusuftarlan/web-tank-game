@@ -31,10 +31,20 @@ const imagePaths = {
 
 export async function loadGameAssets() {
     const promises = Object.entries(imagePaths).map(([key, path]) => {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             const img = new Image();
+            img.decoding = 'async';
             img.src = path;
-            img.onload = () => {
+
+            img.onload = async () => {
+                if (typeof img.decode === 'function') {
+                    try {
+                        await img.decode();
+                    } catch (error) {
+                        // Bazı tarayıcılar image load sonrası decode reject edebilir; görsel yine çizilebilir.
+                    }
+                }
+
                 assets[key] = img;
                 resolve();
             };

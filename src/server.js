@@ -14,7 +14,20 @@ const server = createServer(app);
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public', {
+    setHeaders(res, filePath) {
+        const normalizedPath = filePath.replace(/\\/g, '/');
+
+        if (/\.(html)$/i.test(normalizedPath) || /\.(js|css)$/i.test(normalizedPath)) {
+            res.setHeader('Cache-Control', 'no-cache');
+            return;
+        }
+
+        if (/\/public\/assets\/(audio|sprites|effects|maps|ui)\//.test(normalizedPath)) {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+    }
+}));
 
 // API ve Sayfa Router'ları
 app.use('/api', apiRoutes);

@@ -78,6 +78,7 @@ const BULLET_RADIUS = 4;
 const POWERUP_DURATION = 8000;
 const MAX_AMMO = 7;
 const RELOAD_DURATION = 1000;
+const STATE_BROADCAST_INTERVAL = 1000 / 30;
 
 const ITEM_TYPES = ['HOMING_MISSILE', 'RAPID_FIRE', 'TURBO_DRIVE', 'AOE_EXPLOSION', 'CLUSTER_BOMB', 'BOUNCING_BULLET', 'GHOST_BULLET', 'SHIELD'];
 const ITEM_SPAWN_INTERVAL = 15000;
@@ -109,6 +110,8 @@ function startGameLoop(roomId, room) {
 
     console.log(`[SİSTEM] Oda ${roomId} için 60 FPS Oyun Döngüsü başlatıldı.`);
     
+    let lastStateBroadcastTime = 0;
+
     room.gameInterval = setInterval(() => {
         const now = Date.now();
 
@@ -434,17 +437,22 @@ function startGameLoop(roomId, room) {
             changeMap(room);
         }
 
-        const stateToSend = {
-            players: Object.values(room.gameState.players),
-            bullets: room.gameState.bullets,
-            obstacles: room.gameState.obstacles,
-            activeItems: room.gameState.activeItems, 
-            world: room.gameState.world
-        };
+        if (shouldChangeMap || now - lastStateBroadcastTime >= STATE_BROADCAST_INTERVAL) {
+            lastStateBroadcastTime = now;
 
-        room.clients.forEach(client => {
-            if (client.readyState === 1) client.send(JSON.stringify({ type: 'GAME_STATE_UPDATE', state: stateToSend }));
-        });
+            const stateToSend = {
+                players: Object.values(room.gameState.players),
+                bullets: room.gameState.bullets,
+                obstacles: room.gameState.obstacles,
+                activeItems: room.gameState.activeItems,
+                world: room.gameState.world,
+                serverTime: now
+            };
+
+            room.clients.forEach(client => {
+                if (client.readyState === 1) client.send(JSON.stringify({ type: 'GAME_STATE_UPDATE', state: stateToSend }));
+            });
+        }
 
     }, 1000 / 60);
 }
