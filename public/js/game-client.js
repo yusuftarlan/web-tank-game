@@ -13,6 +13,7 @@ canvas.width = 1920;
 canvas.height = 1080;
 
 const hud = document.getElementById('game-hud');
+const networkDebug = document.getElementById('network-debug');
 const damageOverlay = document.getElementById('damage-overlay');
 const canvasRenderer = createCanvasRenderer(canvas);
 const hudRenderer = createHudRenderer(hud);
@@ -22,6 +23,10 @@ const feedbackManager = createFeedbackManager({ overlayElement: damageOverlay, a
 const INPUT_SEND_INTERVAL_MS = 1000 / 30;
 const INTERPOLATION_DELAY_MS = 100;
 const MAX_STATE_BUFFER_SIZE = 8;
+const PING_INTERVAL_MS = 1000;
+const NETWORK_DEBUG_UPDATE_INTERVAL_MS = 250;
+const STATE_RATE_WINDOW_MS = 1000;
+const JITTER_SAMPLE_SIZE = 30;
 
 initInput(canvas);
 let gameState = createGameState();
@@ -34,11 +39,28 @@ const gameUrlParams = new URLSearchParams(window.location.search);
 const roomId = gameUrlParams.get('roomId') || sessionStorage.getItem('roomId');
 const gameId = gameUrlParams.get('gameId') || sessionStorage.getItem('gameId');
 let previousLocalHealth = null;
-let previousLocalShotTime = null;
+let previousLocalAmmo = null;
 let lastFrameTime = performance.now();
 let lastInputSendTime = 0;
 let lastSentInputKey = '';
 let lastHudKey = '';
+let lastPingSentAt = 0;
+let lastNetworkDebugUpdateAt = 0;
+const networkStats = {
+    ping: null,
+    jitter: null,
+    stateRate: 0,
+    packetSize: 0,
+    lastStateReceivedAt: null,
+    stateReceivedAtSamples: [],
+    stateIntervalSamples: []
+};
+const networkDebugFields = networkDebug ? {
+    ping: networkDebug.querySelector('[data-net-debug="ping"]'),
+    jitter: networkDebug.querySelector('[data-net-debug="jitter"]'),
+    stateRate: networkDebug.querySelector('[data-net-debug="stateRate"]'),
+    packetSize: networkDebug.querySelector('[data-net-debug="packetSize"]')
+} : null;
 
 function findLocalPlayer(state) {
     if (!state || !Array.isArray(state.players)) return null;
@@ -46,7 +68,7 @@ function findLocalPlayer(state) {
 }
 
 function getEntityKey(entity, fallbackIndex) {
-    return entity.id || entity.username || `${fallbackIndex}`;
+    return entity.username || entity.id || `${fallbackIndex}`;
 }
 
 function lerp(start, end, amount) {
@@ -96,8 +118,15 @@ function interpolateList(previousList = [], nextList = [], amount, fields) {
 }
 
 function rememberServerState(nextState) {
-    gameState = nextState;
-    stateBuffer.push({ receivedAt: performance.now(), state: nextState });
+    const mergedState = {
+        ...gameState,
+        ...nextState,
+        world: gameState.world,
+        obstacles: gameState.obstacles
+    };
+
+    gameState = mergedState;
+    stateBuffer.push({ receivedAt: performance.now(), state: mergedState });
 
     if (stateBuffer.length > MAX_STATE_BUFFER_SIZE) {
         stateBuffer = stateBuffer.slice(-MAX_STATE_BUFFER_SIZE);
@@ -149,18 +178,18 @@ function processLocalHealthChange(nextState) {
     previousLocalHealth = nextHealth;
 }
 
-function processLocalShotChange(nextState) {
+function processLocalAmmoChange(nextState) {
     const localPlayer = findLocalPlayer(nextState);
     if (!localPlayer) return;
 
-    const nextShotTime = Number(localPlayer.lastShotTime);
-    if (!Number.isFinite(nextShotTime)) return;
+    const nextAmmo = Number(localPlayer.ammo);
+    if (!Number.isFinite(nextAmmo)) return;
 
-    if (previousLocalShotTime !== null && nextShotTime > previousLocalShotTime) {
+    if (previousLocalAmmo !== null && nextAmmo < previousLocalAmmo) {
         audioManager.playShoot();
     }
 
-    previousLocalShotTime = nextShotTime;
+    previousLocalAmmo = nextAmmo;
 }
 
 function toWorldMouseInput(input, localPlayer) {
@@ -175,6 +204,14 @@ function toWorldMouseInput(input, localPlayer) {
 
 function getInputKey(input) {
     return JSON.stringify(input);
+}
+
+function sendPingIfNeeded(now) {
+    if (!isConnected || socket.readyState !== WebSocket.OPEN) return;
+    if (now - lastPingSentAt < PING_INTERVAL_MS) return;
+
+    lastPingSentAt = now;
+    socket.send(JSON.stringify({ type: 'PING', sentAt: now }));
 }
 
 function sendInputIfNeeded(now, localPlayer) {
@@ -194,11 +231,56 @@ function sendInputIfNeeded(now, localPlayer) {
     lastSentInputKey = inputKey;
 }
 
+function calculateJitter(samples) {
+    if (samples.length === 0) return null;
+
+    const average = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+    const averageDeviation = samples.reduce((sum, value) => sum + Math.abs(value - average), 0) / samples.length;
+    return averageDeviation;
+}
+
+function recordStatePacket(packetSize) {
+    const now = performance.now();
+    networkStats.packetSize = packetSize;
+    networkStats.stateReceivedAtSamples.push(now);
+
+    while (
+        networkStats.stateReceivedAtSamples.length > 0 &&
+        now - networkStats.stateReceivedAtSamples[0] > STATE_RATE_WINDOW_MS
+    ) {
+        networkStats.stateReceivedAtSamples.shift();
+    }
+
+    networkStats.stateRate = networkStats.stateReceivedAtSamples.length;
+
+    if (networkStats.lastStateReceivedAt !== null) {
+        networkStats.stateIntervalSamples.push(now - networkStats.lastStateReceivedAt);
+
+        if (networkStats.stateIntervalSamples.length > JITTER_SAMPLE_SIZE) {
+            networkStats.stateIntervalSamples.shift();
+        }
+
+        networkStats.jitter = calculateJitter(networkStats.stateIntervalSamples);
+    }
+
+    networkStats.lastStateReceivedAt = now;
+}
+
+function updateNetworkDebugIfNeeded(now) {
+    if (!networkDebugFields) return;
+    if (now - lastNetworkDebugUpdateAt < NETWORK_DEBUG_UPDATE_INTERVAL_MS) return;
+
+    lastNetworkDebugUpdateAt = now;
+    networkDebugFields.ping.textContent = networkStats.ping === null ? '-- ms' : `${Math.round(networkStats.ping)} ms`;
+    networkDebugFields.jitter.textContent = networkStats.jitter === null ? '-- ms' : `${Math.round(networkStats.jitter)} ms`;
+    networkDebugFields.stateRate.textContent = String(networkStats.stateRate);
+    networkDebugFields.packetSize.textContent = networkStats.packetSize ? `${networkStats.packetSize} B` : '-- B';
+}
+
 function getHudKey(player) {
     if (!player) return '';
 
     return [
-        player.id,
         player.username,
         player.color,
         Math.floor(player.health || 0),
@@ -254,9 +336,14 @@ function initNetwork() {
             const message = JSON.parse(event.data);
 
             if (message.type === 'GAME_STATE_UPDATE') {
+                recordStatePacket(event.data.length);
                 processLocalHealthChange(message.state);
-                processLocalShotChange(message.state);
+                processLocalAmmoChange(message.state);
                 rememberServerState(message.state);
+            } else if (message.type === 'PONG') {
+                if (Number.isFinite(message.sentAt)) {
+                    networkStats.ping = performance.now() - message.sentAt;
+                }
             } else if (message.type === 'EXPLOSION') {
                 audioManager.playExplosion();
                 activeExplosions.push({
@@ -275,7 +362,7 @@ function initNetwork() {
                     activeItems: []
                 };
                 previousLocalHealth = null;
-                previousLocalShotTime = null;
+                previousLocalAmmo = null;
                 lastHudKey = '';
                 resetInterpolationBuffer();
                 feedbackManager.reset();
@@ -304,6 +391,7 @@ async function startGame() {
         lastFrameTime = now;
         const latestLocalPlayer = findLocalPlayer(gameState);
 
+        sendPingIfNeeded(now);
         sendInputIfNeeded(now, latestLocalPlayer);
 
         activeExplosions.forEach(exp => exp.frame++);
@@ -315,6 +403,7 @@ async function startGame() {
 
         canvasRenderer.render(renderState, activeExplosions, myUsername, feedbackState);
         renderHudIfNeeded(renderedLocalPlayer || latestLocalPlayer);
+        updateNetworkDebugIfNeeded(now);
 
         requestAnimationFrame(gameLoop);
     }

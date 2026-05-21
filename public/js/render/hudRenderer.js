@@ -10,7 +10,7 @@ function clampAmmo(player, maxAmmo) {
 }
 
 function getPlayerKey(player, index) {
-    return player.id || player.username || `player-${index}`;
+    return player.username || player.id || `player-${index}`;
 }
 
 function createAmmoSlot() {

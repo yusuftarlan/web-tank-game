@@ -60,16 +60,68 @@ function changeMap(room) {
     });
 
     // 5. Herkese bilgi gönder
-    const updateMsg = JSON.stringify({ 
-        type: 'MAP_CHANGED', 
-        payload: {
-            obstacles: room.gameState.obstacles,
-            world: room.gameState.world
-        } 
-    });
+    const updateMsg = createMapMessage(room);
     room.clients.forEach(c => { if(c.readyState === 1) c.send(updateMsg); });
     
     console.log(`[SİSTEM] Harita ${randomName} olarak değiştirildi.`);
+}
+
+function createMapMessage(room) {
+    return JSON.stringify({
+        type: 'MAP_CHANGED',
+        payload: {
+            obstacles: room.gameState.obstacles,
+            world: room.gameState.world
+        }
+    });
+}
+
+function serializePlayer(player) {
+    return {
+        username: player.username,
+        x: player.x,
+        y: player.y,
+        rotation: player.rotation,
+        turretRotation: player.turretRotation,
+        health: player.health,
+        score: player.score,
+        powerUp: player.powerUp ? { type: player.powerUp.type } : null,
+        color: player.color,
+        ammo: player.ammo,
+        maxAmmo: player.maxAmmo,
+        isReloading: player.isReloading
+    };
+}
+
+function serializeBullet(bullet) {
+    return {
+        id: bullet.id,
+        ownerId: bullet.ownerId,
+        type: bullet.type,
+        x: bullet.x,
+        y: bullet.y,
+        rotation: bullet.rotation,
+        radius: bullet.radius
+    };
+}
+
+function serializeActiveItem(item) {
+    return {
+        id: item.id,
+        type: item.type,
+        x: item.x,
+        y: item.y,
+        radius: item.radius
+    };
+}
+
+function serializeGameState(room, now) {
+    return {
+        players: Object.values(room.gameState.players).map(serializePlayer),
+        bullets: room.gameState.bullets.map(serializeBullet),
+        activeItems: room.gameState.activeItems.map(serializeActiveItem),
+        serverTime: now
+    };
 }
 
 const FIRE_RATE = 300; 
@@ -440,14 +492,7 @@ function startGameLoop(roomId, room) {
         if (shouldChangeMap || now - lastStateBroadcastTime >= STATE_BROADCAST_INTERVAL) {
             lastStateBroadcastTime = now;
 
-            const stateToSend = {
-                players: Object.values(room.gameState.players),
-                bullets: room.gameState.bullets,
-                obstacles: room.gameState.obstacles,
-                activeItems: room.gameState.activeItems,
-                world: room.gameState.world,
-                serverTime: now
-            };
+            const stateToSend = serializeGameState(room, now);
 
             room.clients.forEach(client => {
                 if (client.readyState === 1) client.send(JSON.stringify({ type: 'GAME_STATE_UPDATE', state: stateToSend }));
@@ -560,11 +605,22 @@ export function initGameServer(server) {
             id: token, username: username, x: spawnPos.x, y: spawnPos.y, rotation: 0, turretRotation: 0, health: 100, score: 0, powerUp: null, color: colors[colorIndex], lastShotTime: 0, ammo: MAX_AMMO, maxAmmo: MAX_AMMO, isReloading: false, reloadEndsAt: 0, input: { up: false, down: false, left: false, right: false, mouseX: 0, mouseY: 0, isShooting: false, reloadRequested: false }
         };
 
+        if (ws.readyState === 1) {
+            ws.send(createMapMessage(room));
+        }
+
         startGameLoop(roomId, room);
 
         ws.on('message', (messageAsString) => {
             try {
                 const message = JSON.parse(messageAsString);
+                if (message.type === 'PING') {
+                    if (ws.readyState === 1) {
+                        ws.send(JSON.stringify({ type: 'PONG', sentAt: message.sentAt, serverTime: Date.now() }));
+                    }
+                    return;
+                }
+
                 if (message.type === 'PLAYER_INPUT' && room.gameState.players[username]) room.gameState.players[username].input = message.payload;
             } catch (error) {}
         });

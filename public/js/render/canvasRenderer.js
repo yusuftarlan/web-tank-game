@@ -116,7 +116,7 @@ export function createCanvasRenderer(canvas) {
             const visiblePlayerKeys = new Set();
 
             players.forEach(player => {
-                const playerKey = player.id || player.username;
+                const playerKey = player.username || player.id;
                 visiblePlayerKeys.add(playerKey);
 
                 const previousAngles = playerRenderAngles.get(playerKey) || {};

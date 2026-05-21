@@ -180,3 +180,36 @@ body, html {
 #game-hud {
     z-index: 2;
 }
+
+#network-debug {
+    position: absolute;
+    top: 116px;
+    right: 20px;
+    z-index: 3;
+    width: 170px;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(12, 18, 28, 0.78);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    color: #dbeafe;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    pointer-events: none;
+    user-select: none;
+}
+
+#network-debug div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#network-debug span {
+    color: #93a4bd;
+}
+
+#network-debug strong {
+    color: #e5f2ff;
+    font-weight: 700;
+}

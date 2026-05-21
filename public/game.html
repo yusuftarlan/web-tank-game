@@ -11,6 +11,12 @@
         <canvas id="game-canvas" width="960" height="540"></canvas>
         <div id="damage-overlay" aria-hidden="true"></div>
         <section id="game-hud" aria-label="Oyun bilgileri"></section>
+        <aside id="network-debug" aria-label="Ağ debug bilgileri">
+            <div><span>Ping</span><strong data-net-debug="ping">-- ms</strong></div>
+            <div><span>Jitter</span><strong data-net-debug="jitter">-- ms</strong></div>
+            <div><span>State/s</span><strong data-net-debug="stateRate">--</strong></div>
+            <div><span>Packet</span><strong data-net-debug="packetSize">-- B</strong></div>
+        </aside>
     </main>
     <script type="module" src="/js/game-client.js"></script>
 </body>
