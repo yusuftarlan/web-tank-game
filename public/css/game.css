@@ -199,6 +199,199 @@ body, html {
     user-select: none;
 }
 
+<<<<<<< HEAD
+=======
+/* ========== FRONTEND İYİLEŞTİRME ANIMASYONLARI ========== */
+
+/* Sayfa Giriş Animasyonları */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes fadeInSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Buton Animasyonları */
+@keyframes buttonGlow {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.3), 0 0 25px rgba(16, 185, 129, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 35px rgba(16, 185, 129, 0.2);
+    }
+}
+
+@keyframes ripple {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 0.6;
+    }
+    100% {
+        width: 400px;
+        height: 400px;
+        opacity: 0;
+    }
+}
+
+@keyframes loadingSpinner {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(16, 185, 129, 0.2);
+    border-top: 3px solid #10b981;
+    border-radius: 50%;
+    animation: loadingSpinner 0.8s linear infinite;
+}
+
+/* Buton Hover Efektleri */
+button, a[class*="bg-emerald"], .btn-primary {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+button:hover:not(:disabled), 
+a[class*="bg-emerald"]:hover,
+.btn-primary:hover {
+    transform: translateY(-2px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+button:active:not(:disabled),
+a[class*="bg-emerald"]:active,
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Ripple Efekti */
+.ripple-effect {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(0);
+    animation: ripple 0.6s ease-out;
+    pointer-events: none;
+}
+
+/* Form Input Animasyonları */
+input[type="text"],
+input[type="email"],
+select {
+    transition: all 0.3s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+select:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Liste Item Hover */
+.room-item, .player-item {
+    transition: all 0.2s ease;
+}
+
+.room-item:hover, 
+.player-item:hover {
+    transform: translateX(4px);
+}
+
+/* Sayfa Konteyneri */
+main, .main-container, .page-container {
+    animation: fadeInScale 0.5s ease-out;
+}
+
+/* Header Animasyonu */
+header {
+    animation: fadeInSlideDown 0.5s ease-out;
+}
+
+/* İçerik Animasyonu */
+section, .content-section {
+    animation: fadeInSlideUp 0.6s ease-out;
+}
+
+/* Oda Listesi Item'ları Sırayla Animasyonlu */
+.room-list > div {
+    animation: fadeInSlideUp 0.4s ease-out backwards;
+}
+
+.room-list > div:nth-child(1) { animation-delay: 0.1s; }
+.room-list > div:nth-child(2) { animation-delay: 0.2s; }
+.room-list > div:nth-child(3) { animation-delay: 0.3s; }
+.room-list > div:nth-child(4) { animation-delay: 0.4s; }
+.room-list > div:nth-child(5) { animation-delay: 0.5s; }
+
+/* Oyuncu Listesi Animasyonu */
+#player-list > li {
+    animation: fadeInSlideUp 0.4s ease-out backwards;
+}
+
+#player-list > li:nth-child(1) { animation-delay: 0.1s; }
+#player-list > li:nth-child(2) { animation-delay: 0.2s; }
+#player-list > li:nth-child(3) { animation-delay: 0.3s; }
+#player-list > li:nth-child(4) { animation-delay: 0.4s; }
+
+/* Pulse Efekti - Beklenen İşlemler İçin */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.pulse-animation {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Disabled Buton */
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+>>>>>>> 6d80468 (feat: Add frontend animations and interactive effects)
 #network-debug div {
     display: flex;
     justify-content: space-between;

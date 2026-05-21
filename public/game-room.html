@@ -5,6 +5,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Tank Game - Bekleme Odasi</title>
     <script src="https://cdn.tailwindcss.com"></script>
+<<<<<<< HEAD
+=======
+    <style>
+        /* Sayfa giriş animasyonu */
+        main {
+            animation: fadeInScale 0.5s ease-out;
+        }
+
+        section {
+            animation: slideUpFade 0.6s ease-out;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideUpFade {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Oyuncu listesi item animasyonu */
+        #player-list > li {
+            animation: fadeInUp 0.3s ease-out backwards;
+        }
+
+        #player-list > li:nth-child(1) { animation-delay: 0.1s; }
+        #player-list > li:nth-child(2) { animation-delay: 0.2s; }
+        #player-list > li:nth-child(3) { animation-delay: 0.3s; }
+        #player-list > li:nth-child(4) { animation-delay: 0.4s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Buton hover ve animasyonları */
+        button {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-3px);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        #start-game-btn:hover {
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.5) !important;
+        }
+
+        /* Ripple efekti */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            transform: scale(0);
+            animation: ripple 0.6s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Kurucu etiketi pulse */
+        .host-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+
+        /* Loading durumu */
+        .loading-item {
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -1000px 0;
+            }
+            100% {
+                background-position: 1000px 0;
+            }
+        }
+
+        /* Mesaj animasyonu */
+        #room-message:not(.hidden) {
+            animation: slideInUp 0.3s ease-out;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Oda başlık animasyonu */
+        .border-b {
+            animation: fadeInSlideDown 0.5s ease-out;
+        }
+
+        @keyframes fadeInSlideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Oyuncu sayacı glow */
+        #player-count {
+            color: #10b981;
+            transition: all 0.3s ease;
+        }
+
+        /* Buton grup animasyonu */
+        .flex.flex-col.gap-3 {
+            animation: fadeInUp 0.6s ease-out;
+            animation-delay: 0.3s;
+        }
+    </style>
+>>>>>>> 6d80468 (feat: Add frontend animations and interactive effects)
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
     <main class="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center px-4 py-8">
