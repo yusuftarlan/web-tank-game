@@ -274,8 +274,11 @@ function startGameLoop(roomId, room) {
         });
 
         // 3. MERMİ FİZİĞİ VE GÜÇ ETKİLERİ
+        let shouldChangeMap = false;
         for (let i = room.gameState.bullets.length - 1; i >= 0; i--) {
             const bullet = room.gameState.bullets[i];
+            if (!bullet) continue;
+
             let isDestroyed = false;
 
             // Mermi Ömrü
@@ -365,9 +368,7 @@ function startGameLoop(roomId, room) {
                                         room.clients.forEach(c => { if (c.readyState === 1) c.send(explosionEvent); });
 
                                         console.log("[SİSTEM] Bir komutan düştü, harita değiştiriliyor...");
-                                        changeMap(room);
-                                        
-                                        
+                                        shouldChangeMap = true;
                                     }
                                 }
                             }
@@ -427,6 +428,10 @@ function startGameLoop(roomId, room) {
                 
                 room.gameState.bullets.splice(i, 1); 
             }
+        }
+
+        if (shouldChangeMap) {
+            changeMap(room);
         }
 
         const stateToSend = {
