@@ -135,7 +135,7 @@ const WIN_SCORE = 100;
 const WIN_KILLS = 10;
 
 const ITEM_TYPES = ['HOMING_MISSILE', 'RAPID_FIRE', 'TURBO_DRIVE', 'AOE_EXPLOSION', 'CLUSTER_BOMB', 'BOUNCING_BULLET', 'GHOST_BULLET', 'SHIELD'];
-const ITEM_SPAWN_INTERVAL = 15000;
+const ITEM_SPAWN_INTERVAL = 5000;
 
 function ensureAmmoState(player) {
     if (!Number.isFinite(player.maxAmmo)) player.maxAmmo = MAX_AMMO;
@@ -494,7 +494,7 @@ function startGameLoop(roomId, room) {
                                     
                                     if (target.health <= 0) {
                                         const matchEnded = awardScore(room, bullet.ownerId);
-                                        
+                                        shouldChangeMap = true; // Her öldürmede harita değişsin
                                         const explosionEvent = JSON.stringify({
                                             type: 'EXPLOSION',
                                             payload: { x: target.x, y: target.y, expType: 'NORMAL' }
@@ -562,10 +562,12 @@ function startGameLoop(roomId, room) {
                     }
                 }
                 
-                room.gameState.bullets.splice(i, 1); 
+                room.gameState.bullets.splice(i, 1);
+                 
             }
+            
         }
-
+        
         if (shouldChangeMap) {
             changeMap(room);
         }
