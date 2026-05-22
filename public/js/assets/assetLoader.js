@@ -14,11 +14,14 @@ const imagePaths = {
     'bullet-GHOST_BULLET': '/assets/sprites/Ghost_Bullet.png',
     'bullet-HOMING_MISSILE': '/assets/sprites/HOMING_MISSILE.png',
     
-    // Duvar
+    // Duvar ve Zemin
     'wall': '/assets/sprites/Wall.png',
+    'background': '/assets/sprites/background.png',
+
 
     // Namlu
         'turret': '/assets/sprites/Gun_01_A.png',
+        
 
     // Güçlendirmeler
     'effect-aoe-cluster': '/assets/effects/AOE&CLUSTER_BOMB.png',

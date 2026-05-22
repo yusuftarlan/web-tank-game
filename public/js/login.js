@@ -1,5 +1,31 @@
 // public/js/login.js
 
+// Ripple Effect Fonksiyonu
+function createRipple(event) {
+    const button = event.currentTarget;
+    const ripple = document.createElement('span');
+    const rect = button.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = event.clientX - rect.left - size / 2;
+    const y = event.clientY - rect.top - size / 2;
+
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = x + 'px';
+    ripple.style.top = y + 'px';
+    ripple.classList.add('ripple');
+
+    button.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+}
+
+// Butonlara ripple efekti ekle
+document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+        const button = e.target.tagName === 'BUTTON' ? e.target : e.target.closest('button');
+        createRipple({ currentTarget: button, clientX: e.clientX, clientY: e.clientY });
+    }
+});
+
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault(); // Sayfanın yenilenmesini engelle
     

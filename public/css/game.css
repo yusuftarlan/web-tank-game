@@ -41,12 +41,12 @@ body, html {
 
 /* Panellerin ekranın 4 köşesine yerleştirilmesi */
 .corner-0 { top: 20px; left: 20px; }
-.corner-1 { top: 20px; right: 20px; flex-direction: row-reverse; } /* Sağ üst */
-.corner-2 { bottom: 20px; left: 20px; }
-.corner-3 { bottom: 20px; right: 20px; flex-direction: row-reverse; } /* Sağ alt */
+.corner-1 { bottom: 20px; left: 20px; }
+.corner-2 { top: 20px; right: 20px; flex-direction: row-reverse; }
+.corner-3 { bottom: 20px; right: 20px; flex-direction: row-reverse; }
 
 /* Sağ taraftaki panellerin yazılarının sağa yaslanması */
-.corner-1 .panel-info, .corner-3 .panel-info {
+.corner-2 .panel-info, .corner-3 .panel-info {
     align-items: flex-end;
 }
 
@@ -199,6 +199,196 @@ body, html {
     user-select: none;
 }
 
+/* ========== FRONTEND İYİLEŞTİRME ANIMASYONLARI ========== */
+
+/* Sayfa Giriş Animasyonları */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes fadeInSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Buton Animasyonları */
+@keyframes buttonGlow {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.3), 0 0 25px rgba(16, 185, 129, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 35px rgba(16, 185, 129, 0.2);
+    }
+}
+
+@keyframes ripple {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 0.6;
+    }
+    100% {
+        width: 400px;
+        height: 400px;
+        opacity: 0;
+    }
+}
+
+@keyframes loadingSpinner {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(16, 185, 129, 0.2);
+    border-top: 3px solid #10b981;
+    border-radius: 50%;
+    animation: loadingSpinner 0.8s linear infinite;
+}
+
+/* Buton Hover Efektleri */
+button, a[class*="bg-emerald"], .btn-primary {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+button:hover:not(:disabled), 
+a[class*="bg-emerald"]:hover,
+.btn-primary:hover {
+    transform: translateY(-2px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+button:active:not(:disabled),
+a[class*="bg-emerald"]:active,
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Ripple Efekti */
+.ripple-effect {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(0);
+    animation: ripple 0.6s ease-out;
+    pointer-events: none;
+}
+
+/* Form Input Animasyonları */
+input[type="text"],
+input[type="email"],
+select {
+    transition: all 0.3s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+select:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Liste Item Hover */
+.room-item, .player-item {
+    transition: all 0.2s ease;
+}
+
+.room-item:hover, 
+.player-item:hover {
+    transform: translateX(4px);
+}
+
+/* Sayfa Konteyneri */
+main, .main-container, .page-container {
+    animation: fadeInScale 0.5s ease-out;
+}
+
+/* Header Animasyonu */
+header {
+    animation: fadeInSlideDown 0.5s ease-out;
+}
+
+/* İçerik Animasyonu */
+section, .content-section {
+    animation: fadeInSlideUp 0.6s ease-out;
+}
+
+/* Oda Listesi Item'ları Sırayla Animasyonlu */
+.room-list > div {
+    animation: fadeInSlideUp 0.4s ease-out backwards;
+}
+
+.room-list > div:nth-child(1) { animation-delay: 0.1s; }
+.room-list > div:nth-child(2) { animation-delay: 0.2s; }
+.room-list > div:nth-child(3) { animation-delay: 0.3s; }
+.room-list > div:nth-child(4) { animation-delay: 0.4s; }
+.room-list > div:nth-child(5) { animation-delay: 0.5s; }
+
+/* Oyuncu Listesi Animasyonu */
+#player-list > li {
+    animation: fadeInSlideUp 0.4s ease-out backwards;
+}
+
+#player-list > li:nth-child(1) { animation-delay: 0.1s; }
+#player-list > li:nth-child(2) { animation-delay: 0.2s; }
+#player-list > li:nth-child(3) { animation-delay: 0.3s; }
+#player-list > li:nth-child(4) { animation-delay: 0.4s; }
+
+/* Pulse Efekti - Beklenen İşlemler İçin */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.pulse-animation {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Disabled Buton */
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
 #network-debug div {
     display: flex;
     justify-content: space-between;
@@ -212,4 +402,176 @@ body, html {
 #network-debug strong {
     color: #e5f2ff;
     font-weight: 700;
+}
+
+.offline-game #game-canvas {
+    object-fit: contain;
+    background: #101820;
+}
+
+.match-end-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(circle at center, rgba(23, 163, 111, 0.28) 0%, rgba(8, 13, 20, 0.82) 42%, rgba(2, 6, 12, 0.92) 100%),
+        rgba(2, 6, 12, 0.74);
+    color: #e5f2ff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    pointer-events: auto;
+}
+
+.match-end-overlay.hidden {
+    display: none;
+}
+
+.offline-victory-panel {
+    width: min(760px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 34px 38px 32px;
+    border: 2px solid rgba(52, 211, 153, 0.72);
+    background: linear-gradient(180deg, rgba(18, 29, 42, 0.98), rgba(8, 14, 22, 0.98));
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+        0 22px 70px rgba(0, 0, 0, 0.65),
+        0 0 44px rgba(16, 185, 129, 0.28);
+}
+
+.offline-victory-kicker {
+    margin-bottom: 10px;
+    color: #93a4bd;
+    font-size: 15px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.offline-victory-title {
+    margin: 0;
+    color: #34d399;
+    font-size: clamp(34px, 5vw, 64px);
+    font-weight: 1000;
+    line-height: 1;
+    text-transform: uppercase;
+    text-shadow: 0 0 24px rgba(52, 211, 153, 0.52);
+}
+
+.offline-victory-meta {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 24px 0;
+}
+
+.offline-victory-badge {
+    min-width: 120px;
+    padding: 10px 14px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    background: rgba(15, 23, 42, 0.82);
+    color: #f8fafc;
+    font-weight: 800;
+}
+
+.offline-victory-hint {
+    color: #cbd5e1;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.match-standings {
+    display: grid;
+    gap: 8px;
+    margin: 22px 0 24px;
+}
+
+.match-standing-row {
+    display: grid;
+    grid-template-columns: 54px 1fr 110px;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    background: rgba(15, 23, 42, 0.72);
+    color: #e5f2ff;
+    font-weight: 800;
+    text-align: left;
+}
+
+.match-standing-rank {
+    color: #34d399;
+    text-align: center;
+}
+
+.match-standing-score {
+    color: #facc15;
+    text-align: right;
+}
+
+.match-end-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.match-end-button {
+    min-width: 160px;
+    padding: 12px 18px;
+    border: 1px solid rgba(52, 211, 153, 0.68);
+    background: #059669;
+    color: white;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.match-end-button:hover,
+.match-end-button:focus {
+    background: #10b981;
+}
+
+.match-end-button.secondary {
+    border-color: rgba(148, 163, 184, 0.5);
+    background: rgba(30, 41, 59, 0.96);
+}
+
+.match-end-button.secondary:hover,
+.match-end-button.secondary:focus {
+    background: rgba(51, 65, 85, 0.98);
+}
+
+.match-end-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.offline-victory-panel {
+    background: #1a1a1a;
+    padding: 40px;
+    border-radius: 20px;
+    border: 3px solid #f1c40f;
+    text-align: center;
+    color: white;
+}
+.match-end-button {
+    background: #e74c3c;
+    color: white;
+    padding: 15px 30px;
+    text-decoration: none;
+    font-weight: bold;
+    border-radius: 5px;
+    display: inline-block;
+    margin-top: 20px;
 }

@@ -25,20 +25,31 @@ function smoothAngle(current, target) {
     return normalizeAngle(current + normalizeAngle(target - current) * ROTATION_SMOOTHING);
 }
 
-export function createCanvasRenderer(canvas) {
+export function createCanvasRenderer(canvas, options = {}) {
     const context = canvas.getContext('2d');
     const playerRenderAngles = new Map();
     let wallPattern = null;
     let wallPatternImage = null;
+    const cameraMode = options.cameraMode || 'follow-player';
 
-    function getWallPattern(wallImg) {
-        if (!wallImg || !wallImg.complete || wallImg.naturalWidth === 0) return null;
-        if (wallPattern && wallPatternImage === wallImg) return wallPattern;
+   function getWallPattern(wallImg) {
+    if (!wallImg || !wallImg.complete || wallImg.naturalWidth === 0) return null;
+    if (wallPattern && wallPatternImage === wallImg) return wallPattern;
 
-        wallPattern = context.createPattern(wallImg, 'repeat');
-        wallPatternImage = wallImg;
-        return wallPattern;
-    }
+    // AI'dan gelen büyük resmi oyunun duvar boyutu olan 40x40'a düşürmek için sanal bir canvas oluşturuyoruz
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = 40;  // Duvarlarının standart genişliği
+    offscreenCanvas.height = 40; // Duvarlarının standart yüksekliği
+    const offscreenContext = offscreenCanvas.getContext('2d');
+    
+    // Büyük resmi 40x40 boyutundaki sanal kareye tam sığacak şekilde küçülterek çiziyoruz
+    offscreenContext.drawImage(wallImg, 0, 0, 40, 40);
+
+    // Artık desenimizi bu küçültülmüş, tam oturan 40x40'lık karodan üretiyoruz
+    wallPattern = context.createPattern(offscreenCanvas, 'repeat');
+    wallPatternImage = wallImg;
+    return wallPattern;
+}
 
     return {
         render(gameState, activeExplosions = [], localPlayerUsername, feedback = {}) {
@@ -58,16 +69,34 @@ export function createCanvasRenderer(canvas) {
             
             context.save();
             
-            if (localPlayer) {
+            if (cameraMode === 'full-map') {
+                context.scale(canvas.width / world.width, canvas.height / world.height);
+            } else if (localPlayer) {
                 // Kamerayı oyuncunun üzerine merkezle
                 context.translate(canvas.width / 2 + cameraShake.x, canvas.height / 2 + cameraShake.y);
                 context.scale(CAMERA_ZOOM, CAMERA_ZOOM);
                 context.translate(-localPlayer.x, -localPlayer.y);
             }
 
-            // Arka planı Full Dünya boyutunda çiz
-            context.fillStyle = '#2b2b2b';
-            context.fillRect(0, 0, world.width, world.height);
+            const bgImg = getImage('background');
+
+            if (bgImg && bgImg.complete && bgImg.naturalWidth !== 0) {
+                context.save();
+                
+                // Resmi (0,0) noktasından başlatıp, tüm dünyanın genişliği ve yüksekliğine yayıyoruz
+                context.drawImage(bgImg, 0, 0, world.width, world.height);
+                
+                // Opsiyonel: Tankların ve mermilerin daha net görünmesi için 
+                // koca resmin üzerine hafif karanlık bir filtre atıyoruz
+                context.fillStyle = 'rgba(20, 15, 10, 0.4)'; 
+                context.fillRect(0, 0, world.width, world.height);
+                
+                context.restore();
+            } else {
+                // Resim yüklenene kadar veya resimde sorun varsa gösterilecek zemin rengi
+                context.fillStyle = '#3d352a'; 
+                context.fillRect(0, 0, world.width, world.height);
+            }
 
             // 1. ENGELLERİ (DUVARLARI) ASSET İLE ÇİZ
             if (obstacles.length > 0) {

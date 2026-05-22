@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Tank Game - Offline Savas</title>
+    <link rel="stylesheet" href="/css/game.css">
+</head>
+<body class="offline-game">
+    <main id="game-root">
+        <canvas id="game-canvas" width="1920" height="1080"></canvas>
+        <div id="damage-overlay" aria-hidden="true"></div>
+        <section id="game-hud" aria-label="Oyun bilgileri"></section>
+        <div id="offline-status" class="match-end-overlay hidden" aria-live="polite"></div>
+    </main>
+    <script type="module" src="/js/offline/offline-game-client.js"></script>
+</body>
+</html>

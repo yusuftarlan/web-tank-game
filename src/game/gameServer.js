@@ -131,9 +131,11 @@ const POWERUP_DURATION = 8000;
 const MAX_AMMO = 7;
 const RELOAD_DURATION = 1000;
 const STATE_BROADCAST_INTERVAL = 1000 / 30;
+const WIN_SCORE = 100;
+const WIN_KILLS = 10;
 
 const ITEM_TYPES = ['HOMING_MISSILE', 'RAPID_FIRE', 'TURBO_DRIVE', 'AOE_EXPLOSION', 'CLUSTER_BOMB', 'BOUNCING_BULLET', 'GHOST_BULLET', 'SHIELD'];
-const ITEM_SPAWN_INTERVAL = 15000;
+const ITEM_SPAWN_INTERVAL = 5000;
 
 function ensureAmmoState(player) {
     if (!Number.isFinite(player.maxAmmo)) player.maxAmmo = MAX_AMMO;
@@ -155,6 +157,83 @@ function startReload(player, now) {
 
     player.isReloading = true;
     player.reloadEndsAt = now + RELOAD_DURATION;
+}
+
+function respawnPlayer(room, playerName) {
+    const player = room.gameState.players[playerName];
+    if (!player || room.gameState.matchEnded) return;
+
+    const respawnPos = getSafeSpawnPosition(room);
+    player.x = respawnPos.x;
+    player.y = respawnPos.y;
+    player.health = 100;
+    player.powerUp = null;
+    resetAmmo(player);
+}
+
+function createStandings(room) {
+    return Object.values(room.gameState.players)
+        .map(player => ({
+            username: player.username,
+            score: player.score,
+            kills: Math.floor((player.score || 0) / 10)
+        }))
+        .sort((first, second) => {
+            if (second.score !== first.score) return second.score - first.score;
+            return first.username.localeCompare(second.username, 'tr');
+        })
+        .map((player, index) => ({
+            ...player,
+            rank: index + 1
+        }));
+}
+
+function broadcastGameOver(room) {
+    const message = JSON.stringify({
+        type: 'GAME_OVER',
+        payload: {
+            winnerUsername: room.gameState.winnerUsername,
+            standings: room.gameState.standings,
+            winKills: WIN_KILLS
+        }
+    });
+
+    room.clients.forEach(client => {
+        if (client.readyState === 1) client.send(message);
+    });
+}
+
+function finishMatch(room, winner) {
+    if (room.gameState.matchEnded) return true;
+
+    room.gameState.matchEnded = true;
+    room.gameState.winnerUsername = winner.username;
+    room.gameState.standings = createStandings(room);
+    room.gameState.bullets = [];
+    room.gameState.activeItems = [];
+    room.status = 'finished';
+    broadcastGameOver(room);
+
+    if (room.gameInterval) {
+        clearInterval(room.gameInterval);
+        room.gameInterval = null;
+    }
+
+    return true;
+}
+
+function awardScore(room, ownerId, score = 10) {
+    if (room.gameState.matchEnded) return false;
+
+    const scorer = room.gameState.players[ownerId];
+    if (!scorer) return false;
+
+    scorer.score += score;
+    if (scorer.score >= WIN_SCORE) {
+        return finishMatch(room, scorer);
+    }
+
+    return false;
 }
 
 function startGameLoop(roomId, room) {
@@ -414,16 +493,35 @@ function startGameLoop(roomId, room) {
                                     target.health -= 25; 
                                     
                                     if (target.health <= 0) {
-                                        if (room.gameState.players[bullet.ownerId]) room.gameState.players[bullet.ownerId].score += 10;
-                                        
+                                        if (room.gameState.players[bullet.ownerId]) {
+                                    const scorer = room.gameState.players[bullet.ownerId];
+                                    
+
+                                    // MAÇ BİTİŞ KONTROLÜ (Skor 100 ise maç biter)
+                                    if (scorer.score >= 100) {
+                                        const standings = Object.values(room.gameState.players)
+                                            .sort((a, b) => b.score - a.score)
+                                            .map((p, i) => ({ rank: i + 1, username: p.username, score: p.score, kills: p.score/10 }));
+
+                                        const gameOverMsg = JSON.stringify({
+                                            type: 'GAME_OVER',
+                                            payload: { winnerUsername: scorer.username, standings: standings, winKills: 10 }
+                                        });
+                                        room.clients.forEach(c => c.send(gameOverMsg));
+                                    }
+                                }
+                                        const matchEnded = awardScore(room, bullet.ownerId);
+                                        shouldChangeMap = true; // Her öldürmede harita değişsin
                                         const explosionEvent = JSON.stringify({
                                             type: 'EXPLOSION',
                                             payload: { x: target.x, y: target.y, expType: 'NORMAL' }
                                         });
                                         room.clients.forEach(c => { if (c.readyState === 1) c.send(explosionEvent); });
 
-                                        console.log("[SİSTEM] Bir komutan düştü, harita değiştiriliyor...");
-                                        shouldChangeMap = true;
+                                        console.log("[SİSTEM] Bir komutan düştü, respawn hazirlaniyor...");
+                                        if (!matchEnded) {
+                                            respawnPlayer(room, targetName);
+                                        }
                                     }
                                 }
                             }
@@ -453,8 +551,8 @@ function startGameLoop(roomId, room) {
                                 else {
                                     p.health -= aoeDamage;
                                     if(p.health <= 0 && room.gameState.players[bullet.ownerId]) {
-                                        room.gameState.players[bullet.ownerId].score += 10;
-                                        setTimeout(() => {
+                                        const matchEnded = awardScore(room, bullet.ownerId);
+                                        if (!matchEnded) setTimeout(() => {
                                             if (room.gameState.players[pName]) {
                                                 const rp = room.gameState.players[pName];
                                                 const respawnPos = getSafeSpawnPosition(room);
@@ -481,10 +579,12 @@ function startGameLoop(roomId, room) {
                     }
                 }
                 
-                room.gameState.bullets.splice(i, 1); 
+                room.gameState.bullets.splice(i, 1);
+                 
             }
+            
         }
-
+        
         if (shouldChangeMap) {
             changeMap(room);
         }
@@ -557,7 +657,7 @@ export function initGameServer(server) {
 
         if (!room.gameState) {
             room.gameState = {
-                players: {}, bullets: [], activeItems: [], lastItemSpawnTime: Date.now(), 
+                players: {}, bullets: [], activeItems: [], lastItemSpawnTime: Date.now(), matchEnded: false, winnerUsername: null, standings: [],
                 obstacles: [
                     // 1. DIŞ ÇERÇEVE (Harita Sınırları)
                     { x: 0, y: 0, width: 1920, height: 20 },
@@ -621,7 +721,7 @@ export function initGameServer(server) {
                     return;
                 }
 
-                if (message.type === 'PLAYER_INPUT' && room.gameState.players[username]) room.gameState.players[username].input = message.payload;
+                if (message.type === 'PLAYER_INPUT' && !room.gameState.matchEnded && room.gameState.players[username]) room.gameState.players[username].input = message.payload;
             } catch (error) {}
         });
 
