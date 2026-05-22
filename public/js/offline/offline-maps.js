@@ -1,4 +1,4 @@
-// src/game/maps.js
+
 
 // Tüm haritalarda standart olan dış sınırları bir değişkende tutalım
 const BORDERS = [

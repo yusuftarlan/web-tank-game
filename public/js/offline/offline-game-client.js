@@ -2,6 +2,7 @@ import { createCanvasRenderer } from '../render/canvasRenderer.js';
 import { createHudRenderer } from '../render/hudRenderer.js';
 import { loadGameAssets } from '../assets/assetLoader.js';
 import { createAudioManager } from '../audio/audioManager.js';
+import { MAPS } from './offline-maps.js';
 
 const canvas = document.getElementById('game-canvas');
 canvas.width = 1920;
@@ -32,7 +33,7 @@ const FIRE_RATE_MS = 330;
 const MAX_AMMO = 7;
 const RELOAD_DURATION_MS = 1000;
 const RESPAWN_DELAY_MS = 1200;
-const SCORE_LIMIT = 5;
+const SCORE_LIMIT = 10;
 const POWERUP_DURATION_MS = 8000;
 const ITEM_SPAWN_INTERVAL_MS = 9000;
 const INITIAL_ITEM_COUNT = 2;
@@ -100,17 +101,82 @@ let gameState = createInitialState(playerCount);
 let activeExplosions = [];
 let lastFrameTime = performance.now();
 let gameOver = false;
+let pendingMapChange = false;
+
+function checkCollision(rect1, rect2) {
+    return (
+        rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y
+    );
+}
 
 function createInitialState(count) {
+    const obstacles = OBSTACLES.map(obstacle => ({ ...obstacle }));
     return {
         players: Array.from({ length: count }, (_, index) => createPlayer(index)),
         bullets: [],
-        activeItems: createInitialPowerUps(INITIAL_ITEM_COUNT),
+        activeItems: createInitialPowerUps(INITIAL_ITEM_COUNT, obstacles),
         lastItemSpawnTime: performance.now(),
-        obstacles: OBSTACLES.map(obstacle => ({ ...obstacle })),
+        obstacles: obstacles,
         world: { ...WORLD }
     };
 }
+
+function getSafeSpawnPosition(room) {
+    let isSafe = false;
+    let safeX, safeY;
+    let attempts = 0;
+    
+    while (!isSafe && attempts < 100) {
+        safeX = Math.random() * (gameState.world.width - 150) + 75;
+        safeY = Math.random() * (gameState.world.height - 150) + 75;
+        isSafe = true;
+        
+        const playerRect = { x: safeX - 20, y: safeY - 15, width: 40, height: 30 };
+        for (const obs of gameState.obstacles) {
+            if (checkCollision(playerRect, obs)) {
+                isSafe = false;
+                break;
+            }
+        }
+        attempts++;
+    }
+    return { x: safeX, y: safeY };
+}
+
+function changeMapOffline() {
+    const mapNames = Object.keys(MAPS); // MAPS objenizin erişilebilir olduğundan emin olun
+    const randomName = mapNames[Math.floor(Math.random() * mapNames.length)];
+    const selectedMap = MAPS[randomName];
+
+    // 1. Harita verilerini güncelle (Deep copy ile)
+    gameState.obstacles = JSON.parse(JSON.stringify(selectedMap.obstacles));
+    gameState.world = { ...selectedMap.world };
+
+    // 2. Mermileri ve yerdeki itemları temizle
+    gameState.bullets = [];
+    gameState.activeItems = [];
+    gameState.lastItemSpawnTime = performance.now();
+    gameState.activeItems = createInitialPowerUps(INITIAL_ITEM_COUNT, selectedMap.obstacles);
+
+    // 3. Oyuncuları güvenli yere ışınla, canlarını tazele, güçlerini sıfırla
+    gameState.players.forEach(p => {
+        const spawnPos = getSafeSpawnPosition();
+        p.x = spawnPos.x;
+        p.y = spawnPos.y;
+        p.health = 100;
+        p.powerUp = null;
+        p.ammo = MAX_AMMO; // Cephaneyi fulle
+        p.isAlive = true;  // Ölü olanı dirilt
+        p.respawnAt = 0;
+    });
+
+    console.log(`[OFFLINE] Harita ${randomName} olarak değiştirildi.`);
+}
+
+
 
 function createPlayer(index) {
     const spawn = PLAYER_SPAWNS[index];
@@ -180,9 +246,9 @@ function getTankRect(player) {
     };
 }
 
-function createInitialPowerUps(count) {
+function createInitialPowerUps(count, obstacles) {
     return Array.from({ length: count }, (_, index) => {
-        const position = getSafeItemPosition();
+        const position = getSafeItemPosition(obstacles);
 
         return {
             id: `offline-start-item-${index}`,
@@ -194,7 +260,7 @@ function createInitialPowerUps(count) {
     });
 }
 
-function getSafeItemPosition() {
+function getSafeItemPosition(obstacles) {
     const radius = 15;
     let spawnX = radius * 2;
     let spawnY = radius * 2;
@@ -211,7 +277,7 @@ function getSafeItemPosition() {
             height: radius * 2
         };
 
-        isSafe = !OBSTACLES.some(obstacle => intersects(itemRect, obstacle));
+        isSafe = !obstacles.some(obstacle => intersects(itemRect, obstacle));
     }
 
     return { x: spawnX, y: spawnY, radius };
@@ -220,7 +286,7 @@ function getSafeItemPosition() {
 function spawnPowerUpIfNeeded(now) {
     if (now - gameState.lastItemSpawnTime < ITEM_SPAWN_INTERVAL_MS) return;
 
-    const position = getSafeItemPosition();
+    const position = getSafeItemPosition(gameState.obstacles);
     gameState.activeItems.push({
         id: `offline-item-${now}-${Math.random().toString(36).slice(2)}`,
         type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
@@ -287,7 +353,7 @@ function moveAxis(player, deltaX, deltaY) {
     player.y = Math.max(TANK_HEIGHT / 2, Math.min(WORLD.height - TANK_HEIGHT / 2, player.y + deltaY));
 
     const rect = getTankRect(player);
-    if (OBSTACLES.some(obstacle => intersects(rect, obstacle))) {
+    if (gameState.obstacles.some(obstacle => intersects(rect, obstacle))) {
         player.x -= deltaX;
         player.y -= deltaY;
     }
@@ -348,78 +414,91 @@ function tryShoot(player, input, now) {
 }
 
 function updateBullets(deltaSeconds, now) {
+    // Sondan başa doğru (reverse loop) gidiyoruz ki splice() diziyi kaydırdığında index hatası almayalım.
     for (let index = gameState.bullets.length - 1; index >= 0; index--) {
         const bullet = gameState.bullets[index];
+
+        // Mermi objesi bir şekilde bozulduysa veya silindiyse döngüyü atla
+        if (!bullet) continue;
+
         let isDestroyed = false;
 
+        // 1. Yaşam süresi kontrolü
         if (Number.isFinite(bullet.lifeTime)) {
             bullet.lifeTime -= deltaSeconds * 1000;
             if (bullet.lifeTime <= 0) isDestroyed = true;
         }
 
-        if (!isDestroyed && bullet.type === 'HOMING_MISSILE') {
-            const target = findNearestTarget(bullet);
-            if (target) {
-                const desiredRotation = Math.atan2(target.y - bullet.y, target.x - bullet.x);
-                const angleDiff = Math.atan2(Math.sin(desiredRotation - bullet.rotation), Math.cos(desiredRotation - bullet.rotation));
-                bullet.rotation += angleDiff * 0.09;
+        // 2. Hareket ve Güdümleme (Mermi henüz yok edilmediyse)
+        if (!isDestroyed) {
+            if (bullet.type === 'HOMING_MISSILE') {
+                const target = findNearestTarget(bullet);
+                if (target) {
+                    const desiredRotation = Math.atan2(target.y - bullet.y, target.x - bullet.x);
+                    const angleDiff = Math.atan2(Math.sin(desiredRotation - bullet.rotation), Math.cos(desiredRotation - bullet.rotation));
+                    bullet.rotation += angleDiff * 0.09;
+                }
+            }
+
+            bullet.x += Math.cos(bullet.rotation) * bullet.speed * deltaSeconds;
+            bullet.y += Math.sin(bullet.rotation) * bullet.speed * deltaSeconds;
+
+            // Harita dışı kontrolü
+            if (bullet.x < 0 || bullet.x > gameState.world.width || bullet.y < 0 || bullet.y > gameState.world.height) {
+                isDestroyed = true;
             }
         }
 
-        if (isDestroyed) {
-            destroyBullet(index);
-            continue;
-        }
+        // 3. Duvar Çarpışması
+        if (!isDestroyed && bullet.type !== 'GHOST_BULLET') {
+            const bulletRect = {
+                x: bullet.x - bullet.radius,
+                y: bullet.y - bullet.radius,
+                width: bullet.radius * 2,
+                height: bullet.radius * 2
+            };
 
-        bullet.x += Math.cos(bullet.rotation) * bullet.speed * deltaSeconds;
-        bullet.y += Math.sin(bullet.rotation) * bullet.speed * deltaSeconds;
-
-        const bulletRect = {
-            x: bullet.x - bullet.radius,
-            y: bullet.y - bullet.radius,
-            width: bullet.radius * 2,
-            height: bullet.radius * 2
-        };
-
-        if (bullet.x < 0 || bullet.x > WORLD.width || bullet.y < 0 || bullet.y > WORLD.height) {
-            destroyBullet(index);
-            continue;
-        }
-
-        if (bullet.type !== 'GHOST_BULLET') {
-            const hitObstacle = OBSTACLES.find(obstacle => intersects(bulletRect, obstacle));
-
+            const hitObstacle = gameState.obstacles.find(obstacle => intersects(bulletRect, obstacle));
             if (hitObstacle) {
                 if (bullet.type === 'BOUNCING_BULLET') {
                     bounceBullet(bullet, bulletRect, hitObstacle);
                 } else {
-                    destroyBullet(index);
-                    continue;
+                    isDestroyed = true;
                 }
             }
         }
 
-        const target = gameState.players.find(player => {
-            return player.isAlive && player.username !== bullet.ownerId && intersects(bulletRect, getTankRect(player));
-        });
+        // 4. Tank Çarpışması
+        if (!isDestroyed) {
+            const bulletRect = {
+                x: bullet.x - bullet.radius,
+                y: bullet.y - bullet.radius,
+                width: bullet.radius * 2,
+                height: bullet.radius * 2
+            };
 
-        if (!target) continue;
-
-        destroyBullet(index);
-
-        if (bullet.type === 'AOE_EXPLOSION' || bullet.type === 'CLUSTER_BOMB') {
-            continue;
+            const target = gameState.players.find(p => p.isAlive && p.username !== bullet.ownerId && intersects(bulletRect, getTankRect(p)));
+            
+            if (target) {
+                isDestroyed = true; // Mermi hedefe çarptı
+                
+                // Patlayan mermilerde hasarı AOE/Cluster fonksiyonu halleder
+                if (bullet.type !== 'AOE_EXPLOSION' && bullet.type !== 'CLUSTER_BOMB') {
+                    if (target.powerUp?.type === 'SHIELD') {
+                        target.powerUp = null;
+                    } else {
+                        target.health = Math.max(0, target.health - 25);
+                        if (target.health <= 0 && target.isAlive) {
+                            knockOutPlayer(target, bullet.ownerId, now);
+                        }
+                    }
+                }
+            }
         }
 
-        if (target.powerUp?.type === 'SHIELD') {
-            target.powerUp = null;
-            continue;
-        }
-
-        target.health = Math.max(0, target.health - 25);
-
-        if (target.health <= 0 && target.isAlive) {
-            knockOutPlayer(target, bullet.ownerId, now);
+        // 5. Yok etme ve Patlama Efektleri (Her durumda en son kontrol edilir)
+        if (isDestroyed) {
+            destroyBullet(index); // Bu fonksiyon splice(index, 1) yapar
         }
     }
 }
@@ -516,6 +595,8 @@ function damagePlayersInRadius(bullet, radius, maxDamage) {
 function knockOutPlayer(target, ownerId, now) {
     target.isAlive = false;
     target.respawnAt = now + RESPAWN_DELAY_MS;
+    
+    // Patlama efektini ekle
     activeExplosions.push({
         x: target.x,
         y: target.y,
@@ -523,8 +604,10 @@ function knockOutPlayer(target, ownerId, now) {
         frame: 0,
         maxFrames: 30
     });
+    
     audioManager.playExplosion();
 
+    // Skoru güncelle ve maç bitişini kontrol et
     const scorer = gameState.players.find(player => player.username === ownerId);
     if (scorer) {
         scorer.score += 10;
@@ -532,8 +615,12 @@ function knockOutPlayer(target, ownerId, now) {
 
         if (kills >= SCORE_LIMIT) {
             finishMatch(scorer);
+            return; // Maç bittiyse harita değiştirmeye gerek yok
         }
     }
+
+    // Harita Değişim Mantığı
+    pendingMapChange = true;
 }
 
 function updateRespawns(now) {
@@ -610,6 +697,7 @@ function resetMatch() {
     gameState = createInitialState(playerCount);
     activeExplosions = [];
     gameOver = false;
+    pendingMapChange = false;
     hideStatus();
 }
 
@@ -642,6 +730,11 @@ function update(deltaSeconds, now) {
 
     updateBullets(deltaSeconds, now);
     updateRespawns(now);
+
+    if (pendingMapChange) {
+        pendingMapChange = false;
+        changeMapOffline();
+    }
 }
 
 function render() {

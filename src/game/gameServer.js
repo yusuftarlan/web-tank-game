@@ -493,6 +493,23 @@ function startGameLoop(roomId, room) {
                                     target.health -= 25; 
                                     
                                     if (target.health <= 0) {
+                                        if (room.gameState.players[bullet.ownerId]) {
+                                    const scorer = room.gameState.players[bullet.ownerId];
+                                    
+
+                                    // MAÇ BİTİŞ KONTROLÜ (Skor 100 ise maç biter)
+                                    if (scorer.score >= 100) {
+                                        const standings = Object.values(room.gameState.players)
+                                            .sort((a, b) => b.score - a.score)
+                                            .map((p, i) => ({ rank: i + 1, username: p.username, score: p.score, kills: p.score/10 }));
+
+                                        const gameOverMsg = JSON.stringify({
+                                            type: 'GAME_OVER',
+                                            payload: { winnerUsername: scorer.username, standings: standings, winKills: 10 }
+                                        });
+                                        room.clients.forEach(c => c.send(gameOverMsg));
+                                    }
+                                }
                                         const matchEnded = awardScore(room, bullet.ownerId);
                                         shouldChangeMap = true; // Her öldürmede harita değişsin
                                         const explosionEvent = JSON.stringify({
